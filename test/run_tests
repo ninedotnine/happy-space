@@ -1,0 +1,39 @@
+#!/usr/bin/dash
+
+run_cmd_in_subdir() {
+    local cmd="$1"
+    local subdir="$2"
+
+    for fi in $(ls -t -r "$subdir"); do
+        fullname="$subdir/$fi"
+        echo -n "testing $cmd ${subdir}/${fi}... "
+
+        input=$(head -n 1 "$fullname")
+        result=$("$cmd" "$input" | scheme - )
+        correct_result=$(tail -n 1 "$fullname")
+
+        if [ "$result" = "$correct_result" ]; then
+            echo "OK."
+            continue
+        else
+            echo "FAILED TEST:"
+            echo "\tinput: $input"
+            echo "\tresult: \t$result"
+            echo "\tcorrect result: $correct_result"
+            exit 1
+        fi
+    done
+}
+
+main() {
+    echo "=== testing expression parser... "
+
+    run_cmd_in_subdir "bin/expr" "test/tests"
+    run_cmd_in_subdir "bin/expr" "test/new_tests"
+    run_cmd_in_subdir "bin/hs_expr" "test/tests"
+    run_cmd_in_subdir "bin/hs_expr" "test/new_tests"
+
+    echo "=== all expression parser tests passed :^)"
+}
+
+main
