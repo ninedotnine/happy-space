@@ -2,6 +2,10 @@ import qualified Text.Parsec as Parsec
 import Text.Parsec (Parsec, (<|>))
 import System.Environment (getArgs)
 
+import Debug.Trace (traceM)
+
+import Control.Monad (when)
+
 -- the oper stack is a temporary storage place for opers
 -- the tree stack holds the result, the output, as well as being used for
 -- intermediate storage
@@ -9,29 +13,32 @@ import System.Environment (getArgs)
 -- only the complete expression tree
 
 newtype Precedence = Precedence Integer deriving (Eq, Ord)
+newtype Tight = Tight Bool deriving Eq
 
 -- newtype Oper_Stack = Oper_Stack {get_oper_stack :: [StackOp]}
-newtype Oper_Stack = Oper_Stack [StackOp]
-data StackOp = StackLParen | StackOp Operator
+newtype Oper_Stack = Oper_Stack [StackOp] deriving Show
+data StackOp = StackLParen | StackLSpace | StackRSpace | StackOp Operator deriving Show
 -- newtype Tree_Stack = Tree_Stack {get_tree_stack :: [ASTree]}
-newtype Tree_Stack = Tree_Stack [ASTree]
-type Stack_State = (Oper_Stack, Tree_Stack)
+newtype Tree_Stack = Tree_Stack [ASTree] deriving Show
+type Stack_State = (Oper_Stack, Tree_Stack, Tight)
 
 data Token = Term Integer
            | Oper Operator
            | LParen
            | RParen
-
+    deriving Show
 
 data ASTree = Branch Operator ASTree ASTree
             | Leaf Integer
+         deriving Show
 
-data Operator = Plus -- keep this?
+data Operator = Plus
               | Minus
               | Splat
               | Divide
               | Modulo
               | Hihat
+              deriving Show
 
 
 oper_to_char :: Operator -> Char
@@ -50,7 +57,6 @@ char_to_oper '*' = Just Splat
 char_to_oper '/' = Just Divide
 char_to_oper '%' = Just Modulo
 char_to_oper '^' = Just Hihat
-char_to_oper '(' = Just LeftParen
 char_to_oper _ = Nothing
 -}
 
@@ -63,11 +69,21 @@ get_prec Modulo = Precedence 7
 get_prec Hihat  = Precedence 8
 
 
+
+fst3 :: (a,b,c) -> a
+fst3 (x,_,_) = x
+
+snd3 :: (a,b,c) -> b
+snd3 (_,x,_) = x
+
+trd3 :: (a,b,c) -> c
+trd3 (_,_,x) = x
+
 -- stack functions
 oper_stack_push :: StackOp -> Parsec String Stack_State ()
 -- oper_stack_push :: Token -> Parsec String Stack_State ()
 oper_stack_push op =
-    Parsec.modifyState (\(Oper_Stack ops, terms) -> (Oper_Stack (op:ops), terms))
+    Parsec.modifyState (\(Oper_Stack ops, terms, b) -> (Oper_Stack (op:ops), terms, b))
 
 {-
 -- oper_stack_pop :: Parsec String Stack_State Operator
@@ -101,14 +117,14 @@ oper_stack_non_empty = do
 
 tree_stack_push :: ASTree -> Parsec String Stack_State ()
 tree_stack_push tree =
-    Parsec.modifyState (\(ops, Tree_Stack vals) -> (ops, Tree_Stack (tree:vals)))
+    Parsec.modifyState (\(ops, Tree_Stack vals, b) -> (ops, Tree_Stack (tree:vals), b))
 
 tree_stack_pop :: Parsec String Stack_State ASTree
 tree_stack_pop = do
-    (opers, vals) <- Parsec.getState
+    (opers, vals, b) <- Parsec.getState
     case vals of
         Tree_Stack (v:vs) -> do
-            Parsec.setState (opers, Tree_Stack vs)
+            Parsec.setState (opers, Tree_Stack vs, b)
             return v
         Tree_Stack _ -> Parsec.unexpected "cockterm"
 --         (_) -> Parsec.parserFail "cock"
@@ -134,24 +150,43 @@ stack_oper_comes_before (Oper op) = do
 stack_oper_comes_before (_) = error "oop"
 -}
 
+begin_spaced_prec :: Parsec String Stack_State ()
+begin_spaced_prec = do
+    if_loosely_spaced (oper_stack_push StackLSpace)
+    set_spacing_tight True
 
+
+set_spacing_tight :: Bool -> Parsec String Stack_State ()
+set_spacing_tight b = Parsec.modifyState (\(s1,s2,_) -> (s1, s2, Tight b))
+
+read_spaces :: Parsec String Stack_State [Char]
+read_spaces = Parsec.many1 (Parsec.char ' ')
+
+ignore_spaces :: Parsec String Stack_State ()
+ignore_spaces = Parsec.many (Parsec.char ' ') *> return ()
 
 parse_num :: Parsec String Stack_State Integer
 parse_num = read <$> Parsec.many1 Parsec.digit
 
+parse_r_paren :: Parsec String Stack_State Token
+parse_r_paren = undefined
+
 parse_oper :: Parsec String Stack_State Operator
 parse_oper = do
-    (Parsec.char '+' *> return Plus)
-    <|> (Parsec.char '-' *> return Minus)
-    <|> (Parsec.char '*' *> return Splat)
+    spacing <- Parsec.optionMaybe read_spaces
+    traceM $ "found spa: " ++ show spacing
+    case spacing of
+        Nothing -> begin_spaced_prec
+        Just _  -> do
+            if_tightly_spaced (trace_stacks *> find_left_space)
+    oper <- (Parsec.char '+' *> return Plus) <|> (Parsec.char '-' *> return Minus) <|> (Parsec.char '*' *> return Splat)
+    if_loosely_spaced (read_spaces *> return ())
+    return oper
 
 
 parse_token :: Parsec String Stack_State Token
-parse_token =
-    (Parsec.char '(' *> return LParen)
-    <|> (Parsec.char ')' *> return RParen)
-    <|> Term <$> parse_num
-    <|> Oper <$> parse_oper
+parse_token = do
+    (Term <$> parse_num) <|> (Oper <$> parse_oper) <|> (ignore_spaces *> ((Parsec.char '(' *> return LParen) <|> (Parsec.char ')' *> return RParen)))
 
 
 make_branch :: Operator -> [StackOp] -> Parsec String Stack_State ()
@@ -159,38 +194,44 @@ make_branch op tokes = do
     r <- tree_stack_pop
     l <- tree_stack_pop
     tree_stack_push (Branch op l r)
-    Parsec.modifyState (\(_,s2) -> (Oper_Stack tokes, s2))
+    Parsec.modifyState (\(_,s2,b) -> (Oper_Stack tokes, s2, b))
 
 
 clean_stack :: Parsec String Stack_State ()
 clean_stack = do
-    Oper_Stack op_stack <- fst <$> Parsec.getState
+    if_tightly_spaced find_left_space
+    Oper_Stack op_stack <- fst3 <$> Parsec.getState
+--     traceM "back to cleanin stack"
+--     trace_stacks
     case op_stack of
         [] -> return ()
-        (tok:tokes) -> case tok of
-            StackLParen -> error "fix types. did i fix the types though"
-            StackOp op -> do
-                make_branch op tokes
-                clean_stack
+        (StackOp op:tokes) -> do
+            make_branch op tokes
+            clean_stack
+        _ -> Parsec.parserFail "incorrect whitespace or parens?"
 
 
 finish_expr :: Parsec String Stack_State ASTree
 finish_expr = do
-    _ <- Parsec.optional (Parsec.char '\n')
+--     traceM "finishin"
+    Parsec.optional ignore_spaces
+    Parsec.optional Parsec.newline
     clean_stack
-    Tree_Stack tree <- snd <$> Parsec.getState
+    Tree_Stack tree <- snd3 <$> Parsec.getState
     case tree of
-        [] -> error "what"
+        [] -> Parsec.parserFail "bad expression"
         (result:[]) -> return result
         _ -> do
             error "extras? what"
 
 apply_higher_prec_ops :: Precedence -> Parsec String Stack_State ()
 apply_higher_prec_ops current = do
-    op_stack <- fst <$> Parsec.getState
+    Oper_Stack op_stack <- fst3 <$> Parsec.getState
     case op_stack of
-        Oper_Stack [] -> return ()
-        Oper_Stack (tok:toks) -> case tok of
+        [] -> return ()
+        (tok:toks) -> case tok of
+            StackLSpace -> return ()
+            StackRSpace -> error "huh what"
             StackLParen -> return ()
             StackOp op -> case (get_prec op `compare` current) of
                 LT -> return ()
@@ -200,26 +241,73 @@ apply_higher_prec_ops current = do
 
 
 
-find_l_paren :: Parsec String Stack_State ()
-find_l_paren = do
-    Oper_Stack op_stack <- fst <$> Parsec.getState
+find_left_paren :: Parsec String Stack_State ()
+find_left_paren = do
+-- pop stuff off the oper_stack until you find a StackLParen
+    Oper_Stack op_stack <- fst3 <$> Parsec.getState
     case op_stack of
         [] -> Parsec.unexpected "right paren"
         (tok:toks) -> case tok of
-            StackLParen -> Parsec.modifyState (\(_,s2) -> (Oper_Stack toks,s2)) *> return ()
+            StackLParen -> Parsec.modifyState (\(_,s2,b) -> (Oper_Stack toks,s2,b)) *> return ()
+            StackRSpace -> Parsec.parserFail "incorrect spacing or parentheses"
+            StackLSpace -> Parsec.parserFail "incorrect spacing or parentheses"
             StackOp op -> do
                 make_branch op toks
-                find_l_paren
+                find_left_paren
 
+trace_stacks :: Parsec String Stack_State ()
+trace_stacks = do
+    (Oper_Stack opstack, Tree_Stack treestack, _) <- Parsec.getState
+    traceM $ "opstack: " ++ show opstack
+    traceM $ "treestack: " ++ show treestack
+    return ()
+
+find_left_space :: Parsec String Stack_State ()
+find_left_space = do
+-- pop stuff off the oper_stack until you find a StackLSpace
+-- and finally set Tight to False
+    trace_stacks
+    Oper_Stack op_stack <- fst3 <$> Parsec.getState
+    case op_stack of
+        [] -> Parsec.unexpected "incorrect spacing"
+        (tok:toks) -> case tok of
+            StackLSpace -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack toks,s2,Tight False))
+            StackRSpace -> error "uecoa"
+            StackLParen -> Parsec.parserFail "FIXME this should be allowed"
+            StackOp op -> do
+                make_branch op toks
+                find_left_space
+
+if_loosely_spaced :: Parsec String Stack_State () -> Parsec String Stack_State ()
+if_loosely_spaced action = do
+    Tight spaced <- trd3 <$> Parsec.getState
+    (when (not spaced)) action
+
+if_tightly_spaced :: Parsec String Stack_State () -> Parsec String Stack_State ()
+if_tightly_spaced action = do
+    Tight spaced <- trd3 <$> Parsec.getState
+    (when spaced) action
 
 
 parse_expression :: Parsec String Stack_State ASTree
 parse_expression = do
     -- shunting yard, returns a parse tree
+    trace_stacks
     toke <- parse_token
+--     traceM $ "toke : " ++ show toke
     case toke of
-        LParen -> oper_stack_push StackLParen *> parse_expression
-        RParen -> find_l_paren *> (parse_expression <|> finish_expr)
+        LParen -> do
+            if_tightly_spaced (oper_stack_push StackRSpace *> set_spacing_tight False)
+            oper_stack_push StackLParen
+            parse_expression
+        RParen -> do
+            if_tightly_spaced find_left_space
+            find_left_paren
+            Oper_Stack stack_ops <- fst3 <$> Parsec.getState
+            case stack_ops of
+                (StackRSpace:ops) -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack ops, s2, Tight True))
+                _ -> return ()
+            parse_expression <|> finish_expr
         Term t -> tree_stack_push (Leaf t) *> (parse_expression <|> finish_expr)
         Oper op -> do
             apply_higher_prec_ops (get_prec op)
@@ -228,7 +316,7 @@ parse_expression = do
 
 
 run_shunting_yard :: String -> String
-run_shunting_yard input = case Parsec.runParser parse_expression (Oper_Stack [],Tree_Stack []) "input" input of
+run_shunting_yard input = case Parsec.runParser (ignore_spaces *> parse_expression) (Oper_Stack [],Tree_Stack [],Tight False) "input" input of
     Left err -> show err
     Right tree -> pretty_print tree
 

@@ -28,11 +28,14 @@ run_cmd_in_subdir() {
 main() {
     echo "=== testing expression parser... "
 
-    run_cmd_in_subdir "bin/expr" "test/tests"
-    run_cmd_in_subdir "bin/expr" "test/new_tests"
+#     run_cmd_in_subdir "bin/expr" "test/tests"
+#     run_cmd_in_subdir "bin/expr" "test/new_tests"
+# #     run_cmd_in_subdir "bin/expr" "test/whitespace_tests/"
     run_cmd_in_subdir "bin/hs_expr" "test/tests"
     run_cmd_in_subdir "bin/hs_expr" "test/new_tests"
-
+    run_cmd_in_subdir "bin/hs_expr" "test/whitespace_tests/"
+    run_cmd_in_subdir "bin/hs_expr" "test/whitespace_free_tests/"
+    run_cmd_in_subdir "bin/hs_expr" "test/new_whitespace_tests"
     echo "=== all expression parser tests passed :^)"
 }
 
