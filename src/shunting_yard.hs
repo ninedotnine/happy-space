@@ -11,14 +11,6 @@ import Control.Monad (when)
 -- only the complete expression tree
 
 newtype Precedence = Precedence Integer deriving (Eq, Ord)
-newtype Tightness = Tight Bool deriving Eq
-
--- newtype Oper_Stack = Oper_Stack {get_oper_stack :: [StackOp]}
-newtype Oper_Stack = Oper_Stack [StackOp] deriving Show
-data StackOp = StackLParen | StackLSpace | StackRSpace | StackOp Operator deriving Show
--- newtype Tree_Stack = Tree_Stack {get_tree_stack :: [ASTree]}
-newtype Tree_Stack = Tree_Stack [ASTree] deriving Show
-type Stack_State = (Oper_Stack, Tree_Stack, Tightness)
 
 data Token = Term Integer
            | Oper Operator
@@ -30,6 +22,13 @@ data ASTree = Branch Operator ASTree ASTree
             | Leaf Integer
          deriving Show
 
+newtype Oper_Stack = Oper_Stack [StackOp] deriving Show
+data StackOp = StackLParen
+             | StackLSpace
+             | StackRSpace
+             | StackOp Operator
+             deriving Show
+
 data Operator = Plus
               | Minus
               | Splat
@@ -37,6 +36,12 @@ data Operator = Plus
               | Modulo
               | Hihat
               deriving Show
+
+newtype Tree_Stack = Tree_Stack [ASTree] deriving Show
+
+newtype Tightness = Tight Bool deriving Eq
+
+type Stack_State = (Oper_Stack, Tree_Stack, Tightness)
 
 
 oper_to_char :: Operator -> Char
@@ -46,17 +51,6 @@ oper_to_char Splat  = '*'
 oper_to_char Divide = '/'
 oper_to_char Modulo = '%'
 oper_to_char Hihat  = '^'
-
-{-
-char_to_oper :: Char -> Maybe Operator
-char_to_oper '+' = Just Plus
-char_to_oper '-' = Just Minus
-char_to_oper '*' = Just Splat
-char_to_oper '/' = Just Divide
-char_to_oper '%' = Just Modulo
-char_to_oper '^' = Just Hihat
-char_to_oper _ = Nothing
--}
 
 get_prec :: Operator -> Precedence
 get_prec Plus   = Precedence 6
@@ -79,39 +73,9 @@ trd3 (_,_,x) = x
 
 -- stack functions
 oper_stack_push :: StackOp -> Parsec String Stack_State ()
--- oper_stack_push :: Token -> Parsec String Stack_State ()
 oper_stack_push op =
     Parsec.modifyState (\(Oper_Stack ops, terms, b) -> (Oper_Stack (op:ops), terms, b))
 
-{-
--- oper_stack_pop :: Parsec String Stack_State Operator
-oper_stack_pop = do
-    (opers, terms) <- Parsec.getState
-    case opers of
-        Oper_Stack (op:ops) -> do
-            Parsec.setState (Oper_Stack ops, terms)
-            return op
-        Oper_Stack (_) -> Parsec.unexpected "cock"
---         (_) -> Parsec.parserFail "cock"
--}
-
-
-{-
-oper_stack_peek :: Parsec String Stack_State (Maybe StackOp)
-oper_stack_peek = do
-    opers <- fst <$> Parsec.getState
-    case opers of
-        Oper_Stack (op:_) -> return (Just op)
-        Oper_Stack (_)   -> return Nothing
--}
-
-
-{-
-oper_stack_non_empty :: Parsec String Stack_State (Bool)
-oper_stack_non_empty = do
-    (Oper_Stack opers) <- fst <$> Parsec.getState
-    return . not $ null opers
--}
 
 tree_stack_push :: ASTree -> Parsec String Stack_State ()
 tree_stack_push tree =
@@ -124,29 +88,8 @@ tree_stack_pop = do
         Tree_Stack (v:vs) -> do
             Parsec.setState (opers, Tree_Stack vs, b)
             return v
-        Tree_Stack _ -> Parsec.unexpected "cockterm"
---         (_) -> Parsec.parserFail "cock"
+        Tree_Stack _ -> Parsec.unexpected "?? did i expect a term?"
 
-{-
-tree_stack_peek :: Parsec String Stack_State (Maybe ASTree)
-tree_stack_peek = do
-    trees <- snd <$> Parsec.getState
-    case trees of
-        Tree_Stack (top:_) -> return (Just top)
-        Tree_Stack (_)     -> return Nothing
--}
-
-
-{-
-stack_oper_comes_before :: Token -> Parsec String Stack_State Bool
-stack_oper_comes_before (Oper op) = do
-    top_of_stack <- oper_stack_peek
-    case top_of_stack of
-        Nothing                   -> return False
-        (Just StackLParen)        -> return False
-        (Just (StackOp stack_op)) -> return (get_prec stack_op > get_prec op)
-stack_oper_comes_before (_) = error "oop"
--}
 
 begin_spaced_prec :: Parsec String Stack_State ()
 begin_spaced_prec = do
@@ -186,14 +129,11 @@ parse_right_paren :: Parsec String Stack_State Token
 parse_right_paren = do
     ignore_spaces *> Parsec.char ')' *> return RParen
 
--- ((Parsec.char '(' *> return LParen) <|> (Parsec.char ')' *> return RParen)))
-
 check_for_oper :: Parsec String Stack_State ()
 check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf "+-*")) *> return ()
 
 parse_token :: Parsec String Stack_State Token
 parse_token = do
---     (Term <$> parse_num) <|> (check_for_oper *> (Oper <$> parse_oper)) <|> (ignore_spaces *> ((Parsec.char '(' *> return LParen) <|> (Parsec.char ')' *> return RParen)))
     (Term <$> parse_num) <|> (check_for_oper *> (Oper <$> parse_oper)) <|> parse_left_paren <|> parse_right_paren
 
 
@@ -243,7 +183,6 @@ apply_higher_prec_ops current = do
                 _ -> do
                     make_branch op toks
                     apply_higher_prec_ops current
-
 
 
 find_left_paren :: Parsec String Stack_State ()
