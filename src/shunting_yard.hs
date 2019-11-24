@@ -262,13 +262,12 @@ parse_expression = do
 run_shunting_yard :: String -> IO ()
 run_shunting_yard input = case Parsec.runParser (ignore_spaces *> parse_expression) (Oper_Stack [],Tree_Stack [],Tight False) "input" input of
     Left err -> putStrLn (show err) >> exitFailure
-    Right tree -> putStrLn (pretty_print tree) >> exitSuccess
+    Right tree -> putStrLn (pretty_show tree) >> exitSuccess
 
 
-pretty_print :: ASTree -> String
-pretty_print (Branch oper left right) = "(" ++ show oper ++ " "  ++
-    pretty_print left ++ " " ++ pretty_print right ++ ")"
-pretty_print (Leaf val) = show val
+pretty_show :: ASTree -> String
+pretty_show (Branch oper left right) = "(" ++ show oper ++ " "  ++ pretty_show left ++ " " ++ pretty_show right ++ ")"
+pretty_show (Leaf val) = show val
 
 
 main :: IO ()
