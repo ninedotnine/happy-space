@@ -125,7 +125,7 @@ parse_oper = do
         Just _  -> do
             if_tightly_spaced find_left_space
     oper <- (Parsec.char '+' *> return Plus) <|> (Parsec.char '-' *> return Minus) <|> (Parsec.char '*' *> return Splat)
-    if_loosely_spaced (read_spaces *> return ())
+    if_loosely_spaced ((read_spaces ) *> return ()) <|> Parsec.parserFail ("invalid whitespace around `" ++ show oper ++ "`")
     return oper
 
 parse_left_paren :: Parsec String Stack_State Token
