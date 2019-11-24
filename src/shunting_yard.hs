@@ -175,8 +175,7 @@ finish_expr = do
     case tree of
         [] -> Parsec.parserFail "bad expression"
         (result:[]) -> return result
-        _ -> do
-            error "extras? what"
+        _ -> Parsec.parserFail "invalid expression, something is wrong here."
 
 apply_higher_prec_ops :: Precedence -> Parsec String Stack_State ()
 apply_higher_prec_ops current = do
