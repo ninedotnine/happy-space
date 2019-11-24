@@ -260,9 +260,10 @@ parse_expression = do
 
 
 run_shunting_yard :: String -> IO ()
-run_shunting_yard input = case Parsec.runParser (ignore_spaces *> parse_expression) (Oper_Stack [],Tree_Stack [],Tight False) "input" input of
-    Left err -> putStrLn (show err) >> exitFailure
-    Right tree -> putStrLn (pretty_show tree) >> exitSuccess
+run_shunting_yard input = case Parsec.runParser (ignore_spaces *> parse_expression) start_state "input" input of
+        Left err -> putStrLn (show err) >> exitFailure
+        Right tree -> putStrLn (pretty_show tree) >> exitSuccess
+    where start_state = (Oper_Stack [],Tree_Stack [],Tight False)
 
 
 pretty_show :: ASTree -> String
