@@ -13,14 +13,14 @@ import Control.Monad (when)
 -- only the complete expression tree
 
 newtype Precedence = Precedence Integer deriving (Eq, Ord)
-newtype Tight = Tight Bool deriving Eq
+newtype Tightness = Tight Bool deriving Eq
 
 -- newtype Oper_Stack = Oper_Stack {get_oper_stack :: [StackOp]}
 newtype Oper_Stack = Oper_Stack [StackOp] deriving Show
 data StackOp = StackLParen | StackLSpace | StackRSpace | StackOp Operator deriving Show
 -- newtype Tree_Stack = Tree_Stack {get_tree_stack :: [ASTree]}
 newtype Tree_Stack = Tree_Stack [ASTree] deriving Show
-type Stack_State = (Oper_Stack, Tree_Stack, Tight)
+type Stack_State = (Oper_Stack, Tree_Stack, Tightness)
 
 data Token = Term Integer
            | Oper Operator
@@ -168,13 +168,10 @@ ignore_spaces = Parsec.many (Parsec.char ' ') *> return ()
 parse_num :: Parsec String Stack_State Integer
 parse_num = read <$> Parsec.many1 Parsec.digit
 
-parse_r_paren :: Parsec String Stack_State Token
-parse_r_paren = undefined
-
 parse_oper :: Parsec String Stack_State Operator
 parse_oper = do
     spacing <- Parsec.optionMaybe read_spaces
-    traceM $ "found spa: " ++ show spacing
+--     traceM $ "found spa: " ++ show spacing
     case spacing of
         Nothing -> begin_spaced_prec
         Just _  -> do
@@ -183,10 +180,24 @@ parse_oper = do
     if_loosely_spaced (read_spaces *> return ())
     return oper
 
+parse_left_paren :: Parsec String Stack_State Token
+parse_left_paren = do
+    Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.char '(' *> return ()))
+    ignore_spaces *> Parsec.char '(' *> return LParen
+
+parse_right_paren :: Parsec String Stack_State Token
+parse_right_paren = do
+    ignore_spaces *> Parsec.char ')' *> return RParen
+
+-- ((Parsec.char '(' *> return LParen) <|> (Parsec.char ')' *> return RParen)))
+
+check_for_oper :: Parsec String Stack_State ()
+check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf "+-*")) *> return ()
 
 parse_token :: Parsec String Stack_State Token
 parse_token = do
-    (Term <$> parse_num) <|> (Oper <$> parse_oper) <|> (ignore_spaces *> ((Parsec.char '(' *> return LParen) <|> (Parsec.char ')' *> return RParen)))
+--     (Term <$> parse_num) <|> (check_for_oper *> (Oper <$> parse_oper)) <|> (ignore_spaces *> ((Parsec.char '(' *> return LParen) <|> (Parsec.char ')' *> return RParen)))
+    (Term <$> parse_num) <|> (check_for_oper *> (Oper <$> parse_oper)) <|> parse_left_paren <|> parse_right_paren
 
 
 make_branch :: Operator -> [StackOp] -> Parsec String Stack_State ()
@@ -257,9 +268,9 @@ find_left_paren = do
 
 trace_stacks :: Parsec String Stack_State ()
 trace_stacks = do
-    (Oper_Stack opstack, Tree_Stack treestack, _) <- Parsec.getState
-    traceM $ "opstack: " ++ show opstack
-    traceM $ "treestack: " ++ show treestack
+--     (Oper_Stack opstack, Tree_Stack treestack, _) <- Parsec.getState
+--     traceM $ "opstack: " ++ show opstack
+--     traceM $ "treestack: " ++ show treestack
     return ()
 
 find_left_space :: Parsec String Stack_State ()
@@ -286,7 +297,7 @@ if_loosely_spaced action = do
 if_tightly_spaced :: Parsec String Stack_State () -> Parsec String Stack_State ()
 if_tightly_spaced action = do
     Tight spaced <- trd3 <$> Parsec.getState
-    (when spaced) action
+    when spaced action
 
 
 parse_expression :: Parsec String Stack_State ASTree
@@ -299,6 +310,7 @@ parse_expression = do
         LParen -> do
             if_tightly_spaced (oper_stack_push StackRSpace *> set_spacing_tight False)
             oper_stack_push StackLParen
+            ignore_spaces
             parse_expression
         RParen -> do
             if_tightly_spaced find_left_space
