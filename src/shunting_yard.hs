@@ -41,7 +41,6 @@ data Operator = Plus
               | Divide
               | Modulo
               | Hihat
-              deriving Show
 
 newtype Tree_Stack = Tree_Stack [ASTree] deriving Show
 
@@ -57,6 +56,9 @@ oper_to_char Splat  = '*'
 oper_to_char Divide = '/'
 oper_to_char Modulo = '%'
 oper_to_char Hihat  = '^'
+
+instance Show Operator where
+    show x = [oper_to_char x]
 
 get_prec :: Operator -> Precedence
 get_prec Plus   = Precedence 6
@@ -263,7 +265,7 @@ run_shunting_yard input = case Parsec.runParser (ignore_spaces *> parse_expressi
 
 
 pretty_print :: ASTree -> String
-pretty_print (Branch oper left right) = "(" ++ [oper_to_char oper] ++ " "  ++
+pretty_print (Branch oper left right) = "(" ++ show oper ++ " "  ++
     pretty_print left ++ " " ++ pretty_print right ++ ")"
 pretty_print (Leaf val) = show val
 
