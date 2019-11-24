@@ -7,6 +7,7 @@
 import qualified Text.Parsec as Parsec
 import Text.Parsec (Parsec, (<|>))
 import System.Environment (getArgs)
+import System.Exit (exitFailure, exitSuccess)
 
 import Control.Monad (when)
 
@@ -258,10 +259,10 @@ parse_expression = do
             parse_expression
 
 
-run_shunting_yard :: String -> String
+run_shunting_yard :: String -> IO ()
 run_shunting_yard input = case Parsec.runParser (ignore_spaces *> parse_expression) (Oper_Stack [],Tree_Stack [],Tight False) "input" input of
-    Left err -> show err
-    Right tree -> pretty_print tree
+    Left err -> putStrLn (show err) >> exitFailure
+    Right tree -> putStrLn (pretty_print tree) >> exitSuccess
 
 
 pretty_print :: ASTree -> String
@@ -273,7 +274,10 @@ pretty_print (Leaf val) = show val
 main :: IO ()
 -- main = interact run_shunting_yard >> putChar '\n'
 main = do
-    getArgs >>= \args -> if length args < 1
-    then
-        interact run_shunting_yard >> putChar '\n'
-    else mapM_ putStrLn $ run_shunting_yard <$> args
+    args <- getArgs
+    if length args == 1
+        then
+            mapM_ run_shunting_yard args
+        else do
+            input <- getContents
+            run_shunting_yard input
