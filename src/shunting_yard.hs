@@ -170,6 +170,7 @@ finish_expr :: Parsec String Stack_State ASTree
 finish_expr = do
     ignore_spaces
     Parsec.optional Parsec.newline
+    Parsec.eof
     clean_stack
     Tree_Stack tree <- snd3 <$> Parsec.getState
     case tree of
