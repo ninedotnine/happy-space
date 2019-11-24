@@ -1,3 +1,9 @@
+-- this is an infix expression parser.
+-- it can be extended to support operations with arbitrary precedence.
+-- it does not make any attempt at associativity, although this is possible.
+-- it gives higher precedence to operators which are not separated by spaces.
+
+
 import qualified Text.Parsec as Parsec
 import Text.Parsec (Parsec, (<|>))
 import System.Environment (getArgs)
