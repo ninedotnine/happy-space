@@ -2,8 +2,6 @@ import qualified Text.Parsec as Parsec
 import Text.Parsec (Parsec, (<|>))
 import System.Environment (getArgs)
 
-import Debug.Trace (traceM)
-
 import Control.Monad (when)
 
 -- the oper stack is a temporary storage place for opers
@@ -171,11 +169,10 @@ parse_num = read <$> Parsec.many1 Parsec.digit
 parse_oper :: Parsec String Stack_State Operator
 parse_oper = do
     spacing <- Parsec.optionMaybe read_spaces
---     traceM $ "found spa: " ++ show spacing
     case spacing of
         Nothing -> begin_spaced_prec
         Just _  -> do
-            if_tightly_spaced (trace_stacks *> find_left_space)
+            if_tightly_spaced find_left_space
     oper <- (Parsec.char '+' *> return Plus) <|> (Parsec.char '-' *> return Minus) <|> (Parsec.char '*' *> return Splat)
     if_loosely_spaced (read_spaces *> return ())
     return oper
@@ -212,8 +209,6 @@ clean_stack :: Parsec String Stack_State ()
 clean_stack = do
     if_tightly_spaced find_left_space
     Oper_Stack op_stack <- fst3 <$> Parsec.getState
---     traceM "back to cleanin stack"
---     trace_stacks
     case op_stack of
         [] -> return ()
         (StackOp op:tokes) -> do
@@ -224,8 +219,7 @@ clean_stack = do
 
 finish_expr :: Parsec String Stack_State ASTree
 finish_expr = do
---     traceM "finishin"
-    Parsec.optional ignore_spaces
+    ignore_spaces
     Parsec.optional Parsec.newline
     clean_stack
     Tree_Stack tree <- snd3 <$> Parsec.getState
@@ -266,18 +260,10 @@ find_left_paren = do
                 make_branch op toks
                 find_left_paren
 
-trace_stacks :: Parsec String Stack_State ()
-trace_stacks = do
---     (Oper_Stack opstack, Tree_Stack treestack, _) <- Parsec.getState
---     traceM $ "opstack: " ++ show opstack
---     traceM $ "treestack: " ++ show treestack
-    return ()
-
 find_left_space :: Parsec String Stack_State ()
 find_left_space = do
 -- pop stuff off the oper_stack until you find a StackLSpace
 -- and finally set Tight to False
-    trace_stacks
     Oper_Stack op_stack <- fst3 <$> Parsec.getState
     case op_stack of
         [] -> Parsec.unexpected "incorrect spacing"
@@ -303,9 +289,7 @@ if_tightly_spaced action = do
 parse_expression :: Parsec String Stack_State ASTree
 parse_expression = do
     -- shunting yard, returns a parse tree
-    trace_stacks
     toke <- parse_token
---     traceM $ "toke : " ++ show toke
     case toke of
         LParen -> do
             if_tightly_spaced (oper_stack_push StackRSpace *> set_spacing_tight False)
