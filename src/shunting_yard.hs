@@ -70,15 +70,21 @@ get_prec Modulo = Precedence 7
 get_prec Hihat  = Precedence 8
 
 
+-- functions to get the current state
+get_op_stack :: Parsec String Stack_State Oper_Stack
+get_op_stack = do
+    (stack, _, _) <- Parsec.getState
+    return stack
 
-fst3 :: (a,b,c) -> a
-fst3 (x,_,_) = x
+get_tree_stack :: Parsec String Stack_State Tree_Stack
+get_tree_stack = do
+    (_, stack, _) <- Parsec.getState
+    return stack
 
-snd3 :: (a,b,c) -> b
-snd3 (_,x,_) = x
-
-trd3 :: (a,b,c) -> c
-trd3 (_,_,x) = x
+get_tightness :: Parsec String Stack_State Tightness
+get_tightness = do
+    (_, _, tightness) <- Parsec.getState
+    return tightness
 
 -- stack functions
 oper_stack_push :: StackOp -> Parsec String Stack_State ()
@@ -164,7 +170,7 @@ make_branch op tokes = do
 clean_stack :: Parsec String Stack_State ()
 clean_stack = do
     if_tightly_spaced find_left_space
-    Oper_Stack op_stack <- fst3 <$> Parsec.getState
+    Oper_Stack op_stack <- get_op_stack
     case op_stack of
         [] -> return ()
         (StackOp op:tokes) -> do
@@ -179,7 +185,7 @@ finish_expr = do
     Parsec.optional Parsec.newline
     Parsec.eof
     clean_stack
-    Tree_Stack tree <- snd3 <$> Parsec.getState
+    Tree_Stack tree <- get_tree_stack
     case tree of
         [] -> Parsec.parserFail "bad expression"
         (result:[]) -> return result
@@ -187,7 +193,7 @@ finish_expr = do
 
 apply_higher_prec_ops :: Precedence -> Parsec String Stack_State ()
 apply_higher_prec_ops current = do
-    Oper_Stack op_stack <- fst3 <$> Parsec.getState
+    Oper_Stack op_stack <- get_op_stack
     case op_stack of
         [] -> return ()
         (tok:toks) -> case tok of
@@ -204,7 +210,7 @@ apply_higher_prec_ops current = do
 find_left_paren :: Parsec String Stack_State ()
 find_left_paren = do
 -- pop stuff off the oper_stack until you find a StackLParen
-    Oper_Stack op_stack <- fst3 <$> Parsec.getState
+    Oper_Stack op_stack <- get_op_stack
     case op_stack of
         [] -> Parsec.unexpected "right paren"
         (tok:toks) -> case tok of
@@ -219,7 +225,7 @@ find_left_space :: Parsec String Stack_State ()
 find_left_space = do
 -- pop stuff off the oper_stack until you find a StackLSpace
 -- and finally set Tight to False
-    Oper_Stack op_stack <- fst3 <$> Parsec.getState
+    Oper_Stack op_stack <- get_op_stack
     case op_stack of
         [] -> Parsec.unexpected "incorrect spacing"
         (tok:toks) -> case tok of
@@ -232,12 +238,12 @@ find_left_space = do
 
 if_loosely_spaced :: Parsec String Stack_State () -> Parsec String Stack_State ()
 if_loosely_spaced action = do
-    Tight spaced <- trd3 <$> Parsec.getState
+    Tight spaced <- get_tightness
     when (not spaced) action
 
 if_tightly_spaced :: Parsec String Stack_State () -> Parsec String Stack_State ()
 if_tightly_spaced action = do
-    Tight spaced <- trd3 <$> Parsec.getState
+    Tight spaced <- get_tightness
     when spaced action
 
 
@@ -254,7 +260,7 @@ parse_expression = do
         RParen -> do
             if_tightly_spaced find_left_space
             find_left_paren
-            Oper_Stack stack_ops <- fst3 <$> Parsec.getState
+            Oper_Stack stack_ops <- get_op_stack
             case stack_ops of
                 (StackRSpace:ops) -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack ops, s2, Tight True))
                 _ -> return ()
