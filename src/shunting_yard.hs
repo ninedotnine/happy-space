@@ -31,8 +31,7 @@ data ASTree = Branch Operator ASTree ASTree
 
 newtype Oper_Stack = Oper_Stack [StackOp] deriving Show
 data StackOp = StackLParen
-             | StackLSpace
-             | StackRSpace
+             | StackSpace
              | StackOp Operator
              deriving Show
 
@@ -110,7 +109,7 @@ tree_stack_pop = do
 
 begin_spaced_prec :: Parsec String Stack_State ()
 begin_spaced_prec = do
-    if_loosely_spaced (oper_stack_push StackLSpace)
+    if_loosely_spaced (oper_stack_push StackSpace)
     set_spacing_tight True
 
 
@@ -205,8 +204,7 @@ apply_higher_prec_ops current = do
     case op_stack of
         [] -> return ()
         (tok:toks) -> case tok of
-            StackLSpace -> return ()
-            StackRSpace -> error "huh what"
+            StackSpace -> return ()
             StackLParen -> return ()
             StackOp op -> case (get_prec op `compare` current) of
                 LT -> return ()
@@ -223,22 +221,20 @@ find_left_paren = do
         [] -> Parsec.unexpected "right paren"
         (tok:toks) -> case tok of
             StackLParen -> Parsec.modifyState (\(_,s2,b) -> (Oper_Stack toks,s2,b)) *> return ()
-            StackRSpace -> Parsec.parserFail "incorrect spacing or parentheses"
-            StackLSpace -> Parsec.parserFail "incorrect spacing or parentheses"
+            StackSpace -> Parsec.parserFail "incorrect spacing or parentheses"
             StackOp op -> do
                 make_branch op toks
                 find_left_paren
 
 find_left_space :: Parsec String Stack_State ()
 find_left_space = do
--- pop stuff off the oper_stack until you find a StackLSpace
+-- pop stuff off the oper_stack until you find a StackSpace
 -- and finally set Tight to False
     Oper_Stack op_stack <- get_op_stack
     case op_stack of
         [] -> Parsec.unexpected "incorrect spacing"
         (tok:toks) -> case tok of
-            StackLSpace -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack toks,s2,Tight False))
-            StackRSpace -> error "uecoa"
+            StackSpace -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack toks,s2,Tight False))
             StackLParen -> Parsec.parserFail "FIXME this should be allowed"
             StackOp op -> do
                 make_branch op toks
@@ -261,7 +257,7 @@ parse_expression = do
     toke <- parse_token
     case toke of
         LParen -> do
-            if_tightly_spaced (oper_stack_push StackRSpace *> set_spacing_tight False)
+            if_tightly_spaced (oper_stack_push StackSpace *> set_spacing_tight False)
             oper_stack_push StackLParen
             ignore_spaces
             parse_expression
@@ -270,7 +266,7 @@ parse_expression = do
             find_left_paren
             Oper_Stack stack_ops <- get_op_stack
             case stack_ops of
-                (StackRSpace:ops) -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack ops, s2, Tight True))
+                (StackSpace:ops) -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack ops, s2, Tight True))
                 _ -> return ()
             parse_expression <|> finish_expr
         Term t -> tree_stack_push (Leaf t) *> (parse_expression <|> finish_expr)
