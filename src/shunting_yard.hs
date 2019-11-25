@@ -23,6 +23,7 @@ data Token = Term Integer
            | Oper Operator
            | LParen
            | RParen
+           | RParenSpaced
     deriving Show
 
 data ASTree = Branch Operator ASTree ASTree
@@ -31,6 +32,7 @@ data ASTree = Branch Operator ASTree ASTree
 
 newtype Oper_Stack = Oper_Stack [StackOp] deriving Show
 data StackOp = StackLParen
+             | StackLParenSpaced
              | StackSpace
              | StackOp Operator
              deriving Show
@@ -156,7 +158,11 @@ parse_left_paren = do
 
 parse_right_paren :: Parsec String Stack_State Token
 parse_right_paren = do
-    ignore_spaces *> Parsec.char ')' *> return RParen
+    spacing <- Parsec.optionMaybe read_spaces
+    Parsec.char ')'
+    return $ case spacing of
+        Nothing -> RParen
+        Just _  -> RParenSpaced
 
 check_for_oper :: Parsec String Stack_State ()
 check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf valid_op_chars)) *> return ()
@@ -206,6 +212,7 @@ apply_higher_prec_ops current = do
         (tok:toks) -> case tok of
             StackSpace -> return ()
             StackLParen -> return ()
+            StackLParenSpaced -> return ()
             StackOp op -> case (get_prec op `compare` current) of
                 LT -> return ()
                 _ -> do
@@ -221,10 +228,26 @@ find_left_paren = do
         [] -> Parsec.unexpected "right paren"
         (tok:toks) -> case tok of
             StackLParen -> Parsec.modifyState (\(_,s2,b) -> (Oper_Stack toks,s2,b)) *> return ()
+            StackLParenSpaced -> Parsec.parserFail "incorrect spacing or parentheses"
             StackSpace -> Parsec.parserFail "incorrect spacing or parentheses"
             StackOp op -> do
                 make_branch op toks
                 find_left_paren
+
+find_left_paren_spaced :: Parsec String Stack_State ()
+find_left_paren_spaced = do
+-- pop stuff off the oper_stack until you find a StackLParen
+    Oper_Stack op_stack <- get_op_stack
+    case op_stack of
+        [] -> Parsec.unexpected "right paren"
+        (tok:toks) -> case tok of
+            StackLParenSpaced -> Parsec.modifyState (\(_,s2,b) -> (Oper_Stack toks,s2,b)) *> return ()
+            StackLParen -> Parsec.parserFail "incorrectly spaced parentheses"
+            StackSpace -> Parsec.parserFail "incorrect spacing or parentheses"
+            StackOp op -> do
+                make_branch op toks
+                find_left_paren_spaced
+
 
 find_left_space :: Parsec String Stack_State ()
 find_left_space = do
@@ -236,6 +259,7 @@ find_left_space = do
         (tok:toks) -> case tok of
             StackSpace -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack toks,s2,Tight False))
             StackLParen -> Parsec.parserFail "FIXME this should be allowed"
+            StackLParenSpaced -> Parsec.parserFail "i feel like these should not be allowed actually"
             StackOp op -> do
                 make_branch op toks
                 find_left_space
@@ -258,12 +282,22 @@ parse_expression = do
     case toke of
         LParen -> do
             if_tightly_spaced (oper_stack_push StackSpace *> set_spacing_tight False)
-            oper_stack_push StackLParen
-            ignore_spaces
+            spacing <- Parsec.optionMaybe read_spaces
+            case spacing of
+                Nothing -> oper_stack_push StackLParen
+                Just _  -> oper_stack_push StackLParenSpaced
             parse_expression
         RParen -> do
             if_tightly_spaced find_left_space
             find_left_paren
+            Oper_Stack stack_ops <- get_op_stack
+            case stack_ops of
+                (StackSpace:ops) -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack ops, s2, Tight True))
+                _ -> return ()
+            parse_expression <|> finish_expr
+        RParenSpaced -> do
+            if_tightly_spaced find_left_space
+            find_left_paren_spaced
             Oper_Stack stack_ops <- get_op_stack
             case stack_ops of
                 (StackSpace:ops) -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack ops, s2, Tight True))
