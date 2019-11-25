@@ -115,19 +115,26 @@ read_spaces = Parsec.many1 (Parsec.char ' ')
 ignore_spaces :: Parsec String Stack_State ()
 ignore_spaces = Parsec.many (Parsec.char ' ') *> return ()
 
-parse_num :: Parsec String Stack_State Integer
-parse_num = read <$> Parsec.many1 Parsec.digit
+parse_num :: Parsec String Stack_State Token
+parse_num = Term <$> read <$> Parsec.many1 Parsec.digit
 
-parse_oper :: Parsec String Stack_State Operator
+parse_oper :: Parsec String Stack_State Token
 parse_oper = do
     spacing <- Parsec.optionMaybe read_spaces
     case spacing of
         Nothing -> begin_spaced_prec
         Just _  -> do
             if_tightly_spaced find_left_space
-    oper <- (Parsec.char '+' *> return Plus) <|> (Parsec.char '-' *> return Minus) <|> (Parsec.char '*' *> return Splat)
+    oper <- parse_oper_symbol
     if_loosely_spaced (read_spaces *> return ()) <|> Parsec.parserFail ("invalid whitespace around `" ++ show oper ++ "`")
-    return oper
+    return (Oper oper)
+
+
+parse_oper_symbol :: Parsec String Stack_State Operator
+parse_oper_symbol =
+    Parsec.char '+' *> return Plus  <|>
+    Parsec.char '-' *> return Minus <|>
+    Parsec.char '*' *> return Splat
 
 parse_left_paren :: Parsec String Stack_State Token
 parse_left_paren = do
@@ -143,7 +150,7 @@ check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf "+-
 
 parse_token :: Parsec String Stack_State Token
 parse_token = do
-    (Term <$> parse_num) <|> (check_for_oper *> (Oper <$> parse_oper)) <|> parse_left_paren <|> parse_right_paren
+    parse_num <|> (check_for_oper *> parse_oper) <|> parse_left_paren <|> parse_right_paren
 
 
 make_branch :: Operator -> [StackOp] -> Parsec String Stack_State ()
