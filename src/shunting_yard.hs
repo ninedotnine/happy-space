@@ -135,8 +135,8 @@ parse_oper = do
             if_tightly_spaced find_left_space
     oper <- parse_oper_symbol
     if_loosely_spaced (read_spaces *> return ()) <|> Parsec.parserFail ("invalid whitespace around `" ++ show oper ++ "`")
+    if_tightly_spaced $ no_spaces ("whitespace after `" ++ show oper ++ "`")
     return (Oper oper)
-
 
 parse_oper_symbol :: Parsec String Stack_State Operator
 parse_oper_symbol =
@@ -146,6 +146,9 @@ parse_oper_symbol =
     Parsec.char '/' *> return Divide <|>
     Parsec.char '%' *> return Modulo <|>
     Parsec.char '^' *> return Hihat
+
+no_spaces :: String -> Parsec String Stack_State ()
+no_spaces failmsg = Parsec.try ((Parsec.try (Parsec.char ' ') *> Parsec.unexpected failmsg) <|> return ())
 
 parse_left_paren :: Parsec String Stack_State Token
 parse_left_paren = do
