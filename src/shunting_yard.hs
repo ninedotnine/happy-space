@@ -49,6 +49,8 @@ newtype Tightness = Tight Bool deriving Eq
 
 type Stack_State = (Oper_Stack, Tree_Stack, Tightness)
 
+valid_op_chars :: String
+valid_op_chars = "+-*/%^"
 
 oper_to_char :: Operator -> Char
 oper_to_char Plus   = '+'
@@ -138,9 +140,12 @@ parse_oper = do
 
 parse_oper_symbol :: Parsec String Stack_State Operator
 parse_oper_symbol =
-    Parsec.char '+' *> return Plus  <|>
-    Parsec.char '-' *> return Minus <|>
-    Parsec.char '*' *> return Splat
+    Parsec.char '+' *> return Plus   <|>
+    Parsec.char '-' *> return Minus  <|>
+    Parsec.char '*' *> return Splat  <|>
+    Parsec.char '/' *> return Divide <|>
+    Parsec.char '%' *> return Modulo <|>
+    Parsec.char '^' *> return Hihat
 
 parse_left_paren :: Parsec String Stack_State Token
 parse_left_paren = do
@@ -152,7 +157,7 @@ parse_right_paren = do
     ignore_spaces *> Parsec.char ')' *> return RParen
 
 check_for_oper :: Parsec String Stack_State ()
-check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf "+-*")) *> return ()
+check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf valid_op_chars)) *> return ()
 
 parse_token :: Parsec String Stack_State Token
 parse_token = do
