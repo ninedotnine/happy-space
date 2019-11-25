@@ -6,7 +6,7 @@ run_cmd_in_subdir() {
 
     for fi in $(ls -t -r "$subdir"); do
         fullname="$subdir/$fi"
-        echo -n "testing $cmd ${subdir}/${fi}... "
+        echo -n "testing $cmd on ${subdir}/${fi}... "
 
         input=$(head -n 1 "$fullname")
         result=$("$cmd" "$input" | scheme - )
@@ -25,6 +25,19 @@ run_cmd_in_subdir() {
     done
 }
 
+run_failing_cmd_in_subdir() {
+    local cmd="$1"
+    local subdir="$2"
+
+    for fi in $(ls -t -r "$subdir"); do
+        fullname="$subdir/$fi"
+        echo -n "testing $cmd < $fullname ..."
+        "$cmd" < "$fullname" > /dev/null && exit 1
+        echo " OK."
+    done
+
+}
+
 main() {
     echo "=== testing expression parser... "
 
@@ -37,6 +50,10 @@ main() {
     run_cmd_in_subdir "bin/hs_expr" "test/whitespace_free_tests/"
     run_cmd_in_subdir "bin/hs_expr" "test/new_whitespace_tests"
     echo "=== all expression parser tests passed :^)"
+
+    echo "=== now checking invalid inputs..."
+    run_failing_cmd_in_subdir "bin/hs_expr" "test/new_failing_tests"
+    echo "=== all bad tests failed :^)"
 }
 
 main
