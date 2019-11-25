@@ -159,7 +159,7 @@ parse_left_paren = do
 parse_right_paren :: Parsec String Stack_State Token
 parse_right_paren = do
     spacing <- Parsec.optionMaybe read_spaces
-    Parsec.char ')'
+    _ <- Parsec.char ')'
     return $ case spacing of
         Nothing -> RParen
         Just _  -> RParenSpaced
