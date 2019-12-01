@@ -118,8 +118,8 @@ begin_spaced_prec = do
 set_spacing_tight :: Bool -> Parsec String Stack_State ()
 set_spacing_tight b = Parsec.modifyState (\(s1,s2,_) -> (s1, s2, Tight b))
 
-read_spaces :: Parsec String Stack_State [Char]
-read_spaces = Parsec.many1 (Parsec.char ' ')
+read_spaces :: Parsec String Stack_State ()
+read_spaces = Parsec.many1 (Parsec.char ' ') *> return ()
 
 ignore_spaces :: Parsec String Stack_State ()
 ignore_spaces = Parsec.many (Parsec.char ' ') *> return ()
@@ -132,10 +132,10 @@ parse_oper = do
     spacing <- Parsec.optionMaybe read_spaces
     case spacing of
         Nothing -> begin_spaced_prec
-        Just _  -> do
+        Just () -> do
             if_tightly_spaced find_left_space
     oper <- parse_oper_symbol
-    if_loosely_spaced ((read_spaces <?> "space after `" ++ show oper ++ "`") *> return ())
+    if_loosely_spaced (read_spaces <?> "space after `" ++ show oper ++ "`")
     if_tightly_spaced $ no_spaces ("whitespace after `" ++ show oper ++ "`")
     return (Oper oper)
 
@@ -162,7 +162,7 @@ parse_right_paren = do
     _ <- Parsec.char ')'
     return $ case spacing of
         Nothing -> RParen
-        Just _  -> RParenAfterSpace
+        Just () -> RParenAfterSpace
 
 check_for_oper :: Parsec String Stack_State ()
 check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf valid_op_chars)) *> return ()
