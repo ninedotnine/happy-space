@@ -5,9 +5,7 @@ OBJ_DIR = cache/obj_files
 HSFLAGS = -Wall -dynamic -hidir $(HI_DIR) -odir $(OBJ_DIR) -i$(SOURCEDIR) 
 CFLAGS = -std=c11 -Wall -Wextra -O3
 
-default: build test
-
-makedirs:
+default: build
 
 build:
 	@mkdir -p $(OUT_DIR) $(HI_DIR) $(OBJ_DIR)
@@ -19,5 +17,5 @@ clean:
 	rm -fr $(OUT_DIR) $(HI_DIR) $(OBJ_DIR)
 
 .PHONY: test
-test:
+test: build
 	@test/run_tests
