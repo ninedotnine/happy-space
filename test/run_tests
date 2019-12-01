@@ -31,8 +31,8 @@ run_failing_cmd_in_subdir() {
 
     for fi in $(ls -t -r "$subdir"); do
         fullname="$subdir/$fi"
-        echo -n "testing $cmd < $fullname ..."
-        "$cmd" < "$fullname" > /dev/null && exit 1
+        echo -n "testing $cmd - < $fullname ..."
+        "$cmd" '-' < "$fullname" > /dev/null && exit 1
         echo " OK."
     done
 

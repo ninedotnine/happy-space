@@ -3,11 +3,15 @@
 -- it does not make any attempt at associativity, although this is possible.
 -- it gives higher precedence to operators which are not separated by spaces.
 
+module ShuntingYard (pretty_show, run_shunting_yard, print_shunting_yard) where
 
 import qualified Text.Parsec as Parsec
 import Text.Parsec (Parsec, (<|>), (<?>))
-import System.Environment (getArgs)
-import System.Exit (exitFailure, exitSuccess)
+
+-- for trim_spaces
+import Data.Char (isSpace)
+import Data.Functor ((<&>))
+import Data.List (dropWhile, dropWhileEnd)
 
 import Control.Monad (when)
 
@@ -310,25 +314,17 @@ parse_expression = do
             parse_expression
 
 
-run_shunting_yard :: String -> IO ()
-run_shunting_yard input = case Parsec.runParser (ignore_spaces *> parse_expression) start_state "input" input of
-        Left err -> putStrLn (show err) >> exitFailure
-        Right tree -> putStrLn (pretty_show tree) >> exitSuccess
-    where start_state = (Oper_Stack [],Tree_Stack [],Tight False)
-
-
 pretty_show :: ASTree -> String
 pretty_show (Branch oper left right) = "(" ++ show oper ++ " "  ++ pretty_show left ++ " " ++ pretty_show right ++ ")"
 pretty_show (Leaf val) = show val
 
+run_shunting_yard :: String -> Either Parsec.ParseError ASTree
+run_shunting_yard input = Parsec.runParser parse_expression start_state "input" (trim_spaces input)
+    where
+        start_state = (Oper_Stack [], Tree_Stack [], Tight False)
+        trim_spaces = dropWhile isSpace <&> dropWhileEnd isSpace
 
-main :: IO ()
--- main = interact run_shunting_yard >> putChar '\n'
-main = do
-    args <- getArgs
-    if length args == 1
-        then
-            mapM_ run_shunting_yard args
-        else do
-            input <- getContents
-            run_shunting_yard input
+print_shunting_yard :: String -> IO ()
+print_shunting_yard input = case run_shunting_yard input of
+    Left err -> putStrLn (show err)
+    Right tree -> putStrLn (pretty_show tree)
