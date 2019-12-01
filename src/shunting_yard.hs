@@ -23,7 +23,7 @@ data Token = Term Integer
            | Oper Operator
            | LParen
            | RParen
-           | RParenSpaced
+           | RParenAfterSpace
     deriving Show
 
 data ASTree = Branch Operator ASTree ASTree
@@ -32,7 +32,7 @@ data ASTree = Branch Operator ASTree ASTree
 
 newtype Oper_Stack = Oper_Stack [StackOp] deriving Show
 data StackOp = StackLParen
-             | StackLParenSpaced
+             | StackLParenFollowedBySpace
              | StackSpace
              | StackOp Operator
              deriving Show
@@ -162,7 +162,7 @@ parse_right_paren = do
     _ <- Parsec.char ')'
     return $ case spacing of
         Nothing -> RParen
-        Just _  -> RParenSpaced
+        Just _  -> RParenAfterSpace
 
 check_for_oper :: Parsec String Stack_State ()
 check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf valid_op_chars)) *> return ()
@@ -212,7 +212,7 @@ apply_higher_prec_ops current = do
         (tok:toks) -> case tok of
             StackSpace -> return ()
             StackLParen -> return ()
-            StackLParenSpaced -> return ()
+            StackLParenFollowedBySpace -> return ()
             StackOp op -> case (get_prec op `compare` current) of
                 LT -> return ()
                 _ -> do
@@ -228,7 +228,7 @@ find_left_paren = do
         [] -> Parsec.unexpected "right paren"
         (tok:toks) -> case tok of
             StackLParen -> Parsec.modifyState (\(_,s2,b) -> (Oper_Stack toks,s2,b)) *> return ()
-            StackLParenSpaced -> Parsec.parserFail "incorrect spacing or parentheses"
+            StackLParenFollowedBySpace -> Parsec.parserFail "incorrect spacing or parentheses"
             StackSpace -> Parsec.parserFail "incorrect spacing or parentheses"
             StackOp op -> do
                 make_branch op toks
@@ -241,8 +241,8 @@ find_left_paren_spaced = do
     case op_stack of
         [] -> Parsec.unexpected "right paren"
         (tok:toks) -> case tok of
-            StackLParenSpaced -> Parsec.modifyState (\(_,s2,b) -> (Oper_Stack toks,s2,b)) *> return ()
             StackLParen -> Parsec.parserFail "incorrectly spaced parentheses"
+            StackLParenFollowedBySpace -> Parsec.modifyState (\(_,s2,b) -> (Oper_Stack toks,s2,b))
             StackSpace -> Parsec.parserFail "incorrect spacing or parentheses"
             StackOp op -> do
                 make_branch op toks
@@ -259,7 +259,7 @@ find_left_space = do
         (tok:toks) -> case tok of
             StackSpace -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack toks,s2,Tight False))
             StackLParen -> Parsec.parserFail "FIXME this should be allowed"
-            StackLParenSpaced -> Parsec.parserFail "i feel like these should not be allowed actually"
+            StackLParenFollowedBySpace -> Parsec.parserFail "i feel like these should not be allowed actually"
             StackOp op -> do
                 make_branch op toks
                 find_left_space
@@ -285,7 +285,7 @@ parse_expression = do
             spacing <- Parsec.optionMaybe read_spaces
             case spacing of
                 Nothing -> oper_stack_push StackLParen
-                Just _  -> oper_stack_push StackLParenSpaced
+                Just _  -> oper_stack_push StackLParenFollowedBySpace
             parse_expression
         RParen -> do
             if_tightly_spaced find_left_space
@@ -295,7 +295,7 @@ parse_expression = do
                 (StackSpace:ops) -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack ops, s2, Tight True))
                 _ -> return ()
             parse_expression <|> finish_expr
-        RParenSpaced -> do
+        RParenAfterSpace -> do
             if_tightly_spaced find_left_space
             find_left_paren_spaced
             Oper_Stack stack_ops <- get_op_stack
