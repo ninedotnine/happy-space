@@ -326,7 +326,7 @@ parse_expression = do
 
 
 pretty_show :: ASTree -> String
-pretty_show (Branch oper left right) = "(" ++ show oper ++ " "  ++ pretty_show left ++ " " ++ pretty_show right ++ ")"
+pretty_show (Branch oper left right) = concat ["(", show oper, " ", pretty_show left, " ", pretty_show right, ")"]
 pretty_show (Leaf val) = show val
 
 run_shunting_yard :: Text -> Either Parsec.ParseError ASTree
