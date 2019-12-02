@@ -1,7 +1,7 @@
 OUT_DIR = bin
 HI_DIR = cache/hi_files
 OBJ_DIR = cache/obj_files
-HSFLAGS = -Wall -dynamic -hidir $(HI_DIR) -odir $(OBJ_DIR)
+HSFLAGS = -Wall -dynamic -j -hidir $(HI_DIR) -odir $(OBJ_DIR)
 CFLAGS = -std=c11 -Wall -Wextra -O3
 
 default: build
