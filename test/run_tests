@@ -9,7 +9,7 @@ run_cmd_in_subdir() {
         echo -n "testing $cmd on ${subdir}/${fi}... "
 
         input=$(head -n 1 "$fullname")
-        result=$("$cmd" "$input" | scheme - )
+        result=$("$cmd" "$input")
         correct_result=$(tail -n 1 "$fullname")
 
         if [ "$result" = "$correct_result" ]; then

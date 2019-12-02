@@ -4,7 +4,7 @@ import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (hFlush, stdout)
 
-import ShuntingYard (run_shunting_yard, print_shunting_yard, pretty_show)
+import ShuntingYard
 
 main :: IO ()
 main = do
@@ -20,14 +20,14 @@ parse_stdin = do
     input <- getContents
     case run_shunting_yard input of
         Left err -> putStrLn (show err) >> exitFailure
-        Right tree -> putStrLn (pretty_show tree) >> exitSuccess
+        Right tree -> putStrLn (eval_show tree) >> exitSuccess
 
 repl :: IO ()
 repl = forever $ do
     putStr "> "
     hFlush stdout
     input <- getLine
-    print_shunting_yard input
+    parse_eval_print input
 
 parse_all :: [String] -> IO ()
-parse_all exprs = mapM_ print_shunting_yard exprs
+parse_all exprs = mapM_ parse_eval_print exprs

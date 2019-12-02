@@ -3,7 +3,14 @@
 -- it does not make any attempt at associativity, although this is possible.
 -- it gives higher precedence to operators which are not separated by spaces.
 
-module ShuntingYard (pretty_show, run_shunting_yard, print_shunting_yard) where
+module ShuntingYard (
+    pretty_show,
+    run_shunting_yard,
+    print_shunting_yard,
+    evaluate,
+    eval_show,
+    parse_eval_print
+) where
 
 import qualified Text.Parsec as Parsec
 import Text.Parsec (Parsec, (<|>), (<?>))
@@ -328,3 +335,22 @@ print_shunting_yard :: String -> IO ()
 print_shunting_yard input = case run_shunting_yard input of
     Left err -> putStrLn (show err)
     Right tree -> putStrLn (pretty_show tree)
+
+evaluate :: ASTree -> Integer
+evaluate (Leaf x) = x
+evaluate (Branch op left right) = evaluate left `operate` evaluate right
+    where operate = case op of
+            Plus   -> (+)
+            Minus  -> (-)
+            Splat  -> (*)
+            Divide -> div
+            Modulo -> mod
+            Hihat  -> (^)
+
+eval_show :: ASTree -> String
+eval_show = evaluate <&> show
+
+parse_eval_print :: String -> IO ()
+parse_eval_print input = case run_shunting_yard input of
+    Left err -> putStrLn (show err)
+    Right tree -> putStrLn (eval_show tree)
