@@ -61,6 +61,8 @@ newtype Tightness = Tight Bool deriving Eq
 
 type Stack_State = (Oper_Stack, Tree_Stack, Tightness)
 
+type CuteParser = Parsec String Stack_State
+
 valid_op_chars :: String
 valid_op_chars = "+-*/%^"
 
@@ -85,32 +87,32 @@ get_prec Hihat  = Precedence 8
 
 
 -- functions to get the current state
-get_op_stack :: Parsec String Stack_State Oper_Stack
+get_op_stack :: CuteParser Oper_Stack
 get_op_stack = do
     (stack, _, _) <- Parsec.getState
     return stack
 
-get_tree_stack :: Parsec String Stack_State Tree_Stack
+get_tree_stack :: CuteParser Tree_Stack
 get_tree_stack = do
     (_, stack, _) <- Parsec.getState
     return stack
 
-get_tightness :: Parsec String Stack_State Tightness
+get_tightness :: CuteParser Tightness
 get_tightness = do
     (_, _, tightness) <- Parsec.getState
     return tightness
 
 -- stack functions
-oper_stack_push :: StackOp -> Parsec String Stack_State ()
+oper_stack_push :: StackOp -> CuteParser ()
 oper_stack_push op =
     Parsec.modifyState (\(Oper_Stack ops, terms, b) -> (Oper_Stack (op:ops), terms, b))
 
 
-tree_stack_push :: ASTree -> Parsec String Stack_State ()
+tree_stack_push :: ASTree -> CuteParser ()
 tree_stack_push tree =
     Parsec.modifyState (\(ops, Tree_Stack vals, b) -> (ops, Tree_Stack (tree:vals), b))
 
-tree_stack_pop :: Parsec String Stack_State ASTree
+tree_stack_pop :: CuteParser ASTree
 tree_stack_pop = do
     (opers, vals, b) <- Parsec.getState
     case vals of
@@ -120,25 +122,25 @@ tree_stack_pop = do
         Tree_Stack _ -> Parsec.unexpected "?? did i expect a term?"
 
 
-begin_spaced_prec :: Parsec String Stack_State ()
+begin_spaced_prec :: CuteParser ()
 begin_spaced_prec = do
     if_loosely_spaced (oper_stack_push StackSpace)
     set_spacing_tight True
 
 
-set_spacing_tight :: Bool -> Parsec String Stack_State ()
+set_spacing_tight :: Bool -> CuteParser ()
 set_spacing_tight b = Parsec.modifyState (\(s1,s2,_) -> (s1, s2, Tight b))
 
-read_spaces :: Parsec String Stack_State ()
+read_spaces :: CuteParser ()
 read_spaces = Parsec.many1 (Parsec.char ' ') *> return ()
 
-ignore_spaces :: Parsec String Stack_State ()
+ignore_spaces :: CuteParser ()
 ignore_spaces = Parsec.many (Parsec.char ' ') *> return ()
 
-parse_num :: Parsec String Stack_State Token
+parse_num :: CuteParser Token
 parse_num = Term <$> read <$> Parsec.many1 Parsec.digit
 
-parse_oper :: Parsec String Stack_State Token
+parse_oper :: CuteParser Token
 parse_oper = do
     spacing <- Parsec.optionMaybe read_spaces
     case spacing of
@@ -150,7 +152,7 @@ parse_oper = do
     if_tightly_spaced $ no_spaces ("whitespace after `" ++ show oper ++ "`")
     return (Oper oper)
 
-parse_oper_symbol :: Parsec String Stack_State Operator
+parse_oper_symbol :: CuteParser Operator
 parse_oper_symbol =
     Parsec.char '+' *> return Plus   <|>
     Parsec.char '-' *> return Minus  <|>
@@ -159,15 +161,15 @@ parse_oper_symbol =
     Parsec.char '%' *> return Modulo <|>
     Parsec.char '^' *> return Hihat
 
-no_spaces :: String -> Parsec String Stack_State ()
+no_spaces :: String -> CuteParser ()
 no_spaces failmsg = Parsec.try ((Parsec.try (Parsec.char ' ') *> Parsec.unexpected failmsg) <|> return ())
 
-parse_left_paren :: Parsec String Stack_State Token
+parse_left_paren :: CuteParser Token
 parse_left_paren = do
     Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.char '(' *> return ()))
     ignore_spaces *> Parsec.char '(' *> return LParen
 
-parse_right_paren :: Parsec String Stack_State Token
+parse_right_paren :: CuteParser Token
 parse_right_paren = do
     spacing <- Parsec.optionMaybe read_spaces
     _ <- Parsec.char ')'
@@ -175,15 +177,15 @@ parse_right_paren = do
         Nothing -> RParen
         Just () -> RParenAfterSpace
 
-check_for_oper :: Parsec String Stack_State ()
+check_for_oper :: CuteParser ()
 check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf valid_op_chars)) *> return ()
 
-parse_token :: Parsec String Stack_State Token
+parse_token :: CuteParser Token
 parse_token = do
     parse_num <|> (check_for_oper *> parse_oper) <|> parse_left_paren <|> parse_right_paren
 
 
-make_branch :: Operator -> [StackOp] -> Parsec String Stack_State ()
+make_branch :: Operator -> [StackOp] -> CuteParser ()
 make_branch op tokes = do
     r <- tree_stack_pop
     l <- tree_stack_pop
@@ -191,7 +193,7 @@ make_branch op tokes = do
     Parsec.modifyState (\(_,s2,b) -> (Oper_Stack tokes, s2, b))
 
 
-clean_stack :: Parsec String Stack_State ()
+clean_stack :: CuteParser ()
 clean_stack = do
     if_tightly_spaced find_left_space
     Oper_Stack op_stack <- get_op_stack
@@ -203,7 +205,7 @@ clean_stack = do
         _ -> Parsec.parserFail "incorrect whitespace or parens?"
 
 
-finish_expr :: Parsec String Stack_State ASTree
+finish_expr :: CuteParser ASTree
 finish_expr = do
     ignore_spaces
     Parsec.optional Parsec.newline
@@ -215,7 +217,7 @@ finish_expr = do
         (result:[]) -> return result
         _ -> Parsec.parserFail "invalid expression, something is wrong here."
 
-apply_higher_prec_ops :: Precedence -> Parsec String Stack_State ()
+apply_higher_prec_ops :: Precedence -> CuteParser ()
 apply_higher_prec_ops current = do
     Oper_Stack op_stack <- get_op_stack
     case op_stack of
@@ -231,7 +233,7 @@ apply_higher_prec_ops current = do
                     apply_higher_prec_ops current
 
 
-find_left_paren :: Parsec String Stack_State ()
+find_left_paren :: CuteParser ()
 find_left_paren = do
 -- pop stuff off the oper_stack until you find a StackLParen
     Oper_Stack op_stack <- get_op_stack
@@ -245,7 +247,7 @@ find_left_paren = do
                 make_branch op toks
                 find_left_paren
 
-find_left_paren_spaced :: Parsec String Stack_State ()
+find_left_paren_spaced :: CuteParser ()
 find_left_paren_spaced = do
 -- pop stuff off the oper_stack until you find a StackLParen
     Oper_Stack op_stack <- get_op_stack
@@ -260,7 +262,7 @@ find_left_paren_spaced = do
                 find_left_paren_spaced
 
 
-find_left_space :: Parsec String Stack_State ()
+find_left_space :: CuteParser ()
 find_left_space = do
 -- pop stuff off the oper_stack until you find a StackSpace
 -- and finally set Tight to False
@@ -275,18 +277,18 @@ find_left_space = do
                 make_branch op toks
                 find_left_space
 
-if_loosely_spaced :: Parsec String Stack_State () -> Parsec String Stack_State ()
+if_loosely_spaced :: CuteParser () -> CuteParser ()
 if_loosely_spaced action = do
     Tight spaced <- get_tightness
     when (not spaced) action
 
-if_tightly_spaced :: Parsec String Stack_State () -> Parsec String Stack_State ()
+if_tightly_spaced :: CuteParser () -> CuteParser ()
 if_tightly_spaced action = do
     Tight spaced <- get_tightness
     when spaced action
 
 
-parse_expression :: Parsec String Stack_State ASTree
+parse_expression :: CuteParser ASTree
 parse_expression = do
     -- shunting yard, returns a parse tree
     toke <- parse_token
