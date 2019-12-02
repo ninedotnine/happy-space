@@ -19,3 +19,4 @@ clean:
 .PHONY: test
 test: build
 	@test/run_tests
+	@echo "all tests passing! :^D"
