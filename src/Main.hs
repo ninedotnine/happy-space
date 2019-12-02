@@ -1,5 +1,6 @@
 module Main where
-import Control.Monad (forever)
+import Control.Monad (forever, unless)
+import Data.Char (isSpace)
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (hFlush, stdout)
@@ -27,7 +28,7 @@ repl = forever $ do
     putStr "> "
     hFlush stdout
     input <- getLine
-    parse_eval_print input
+    unless (all isSpace input) (parse_eval_print input)
 
 parse_all :: [String] -> IO ()
 parse_all exprs = mapM_ parse_eval_print exprs
