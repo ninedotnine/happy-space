@@ -18,7 +18,9 @@ import Text.Parsec (Parsec, (<|>), (<?>))
 -- for trim_spaces
 import Data.Char (isSpace)
 import Data.Functor ((<&>))
-import Data.List (dropWhile, dropWhileEnd)
+
+import Data.Text (Text)
+import qualified Data.Text as Text
 
 import Control.Monad (when)
 
@@ -61,7 +63,7 @@ newtype Tightness = Tight Bool deriving Eq
 
 type Stack_State = (Oper_Stack, Tree_Stack, Tightness)
 
-type CuteParser = Parsec String Stack_State
+type CuteParser = Parsec Text Stack_State
 
 valid_op_chars :: String
 valid_op_chars = "+-*/%^"
@@ -327,13 +329,13 @@ pretty_show :: ASTree -> String
 pretty_show (Branch oper left right) = "(" ++ show oper ++ " "  ++ pretty_show left ++ " " ++ pretty_show right ++ ")"
 pretty_show (Leaf val) = show val
 
-run_shunting_yard :: String -> Either Parsec.ParseError ASTree
+run_shunting_yard :: Text -> Either Parsec.ParseError ASTree
 run_shunting_yard input = Parsec.runParser parse_expression start_state "input" (trim_spaces input)
     where
         start_state = (Oper_Stack [], Tree_Stack [], Tight False)
-        trim_spaces = dropWhile isSpace <&> dropWhileEnd isSpace
+        trim_spaces = Text.dropWhile isSpace <&> Text.dropWhileEnd isSpace
 
-print_shunting_yard :: String -> IO ()
+print_shunting_yard :: Text -> IO ()
 print_shunting_yard input = case run_shunting_yard input of
     Left err -> putStrLn (show err)
     Right tree -> putStrLn (pretty_show tree)
@@ -352,7 +354,7 @@ evaluate (Branch op left right) = evaluate left `operate` evaluate right
 eval_show :: ASTree -> String
 eval_show = evaluate <&> show
 
-parse_eval_print :: String -> IO ()
+parse_eval_print :: Text -> IO ()
 parse_eval_print input = case run_shunting_yard input of
     Left err -> putStrLn (show err)
     Right tree -> putStrLn (eval_show tree)
