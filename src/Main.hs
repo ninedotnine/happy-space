@@ -10,18 +10,10 @@ import ShuntingYard
 main :: IO ()
 main = do
     args <- getArgs
-    if length args == 0
-        then repl
-        else if elem "-" args
-            then parse_stdin
-            else parse_all args
-
-parse_stdin :: IO ()
-parse_stdin = do
-    input <- getContents
-    case run_shunting_yard input of
-        Left err -> putStrLn (show err) >> exitFailure
-        Right tree -> putStrLn (eval_show tree) >> exitSuccess
+    case args of
+        []    -> repl
+        ["-"] -> parse_stdin
+        _     -> parse_all args
 
 repl :: IO ()
 repl = forever $ do
@@ -29,6 +21,13 @@ repl = forever $ do
     hFlush stdout
     input <- getLine
     unless (all isSpace input) (parse_eval_print input)
+
+parse_stdin :: IO ()
+parse_stdin = do
+    input <- getContents
+    case run_shunting_yard input of
+        Left err -> putStrLn (show err) >> exitFailure
+        Right tree -> putStrLn (eval_show tree) >> exitSuccess
 
 parse_all :: [String] -> IO ()
 parse_all exprs = mapM_ parse_eval_print exprs
