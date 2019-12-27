@@ -32,11 +32,12 @@ import Control.Monad (when)
 
 newtype Precedence = Precedence Integer deriving (Eq, Ord)
 
-data Token = Term Integer
-           | Oper Operator
-           | LParen
-           | RParen
-           | RParenAfterSpace
+data TermToken = Term Integer
+               | LParen
+
+data OperToken = Oper Operator
+               | RParen
+               | RParenAfterSpace
     deriving Show
 
 data ASTree = Branch Operator ASTree ASTree
@@ -139,10 +140,10 @@ read_spaces = Parsec.many1 (Parsec.char ' ') *> return ()
 ignore_spaces :: CuteParser ()
 ignore_spaces = Parsec.many (Parsec.char ' ') *> return ()
 
-parse_num :: CuteParser Token
+parse_num :: CuteParser TermToken
 parse_num = Term <$> read <$> Parsec.many1 Parsec.digit
 
-parse_oper :: CuteParser Token
+parse_oper :: CuteParser OperToken
 parse_oper = do
     spacing <- Parsec.optionMaybe read_spaces
     case spacing of
@@ -166,12 +167,12 @@ parse_oper_symbol =
 no_spaces :: String -> CuteParser ()
 no_spaces failmsg = Parsec.try ((Parsec.try (Parsec.char ' ') *> Parsec.unexpected failmsg) <|> return ())
 
-parse_left_paren :: CuteParser Token
+parse_left_paren :: CuteParser TermToken
 parse_left_paren = do
     Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.char '(' *> return ()))
     ignore_spaces *> Parsec.char '(' *> return LParen
 
-parse_right_paren :: CuteParser Token
+parse_right_paren :: CuteParser OperToken
 parse_right_paren = do
     spacing <- Parsec.optionMaybe read_spaces
     _ <- Parsec.char ')'
@@ -182,9 +183,11 @@ parse_right_paren = do
 check_for_oper :: CuteParser ()
 check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf valid_op_chars)) *> return ()
 
-parse_token :: CuteParser Token
-parse_token = do
-    parse_num <|> (check_for_oper *> parse_oper) <|> parse_left_paren <|> parse_right_paren
+parse_term_token :: CuteParser TermToken
+parse_term_token = parse_num <|> parse_left_paren
+
+parse_oper_token :: CuteParser OperToken
+parse_oper_token = (check_for_oper *> parse_oper) <|> parse_right_paren
 
 
 make_branch :: Operator -> [StackOp] -> CuteParser ()
@@ -295,11 +298,8 @@ parse_expression = expect_term
 expect_term :: CuteParser ASTree
 expect_term = do
     -- shunting yard, returns a parse tree
-    toke <- parse_token
+    toke <- parse_term_token
     case toke of
-        RParen -> Parsec.unexpected "very bad RParen ):"
-        RParenAfterSpace -> Parsec.unexpected "very bad (spaced) RParen ):"
-        Oper _ -> Parsec.unexpected "very bad op"
         LParen -> do
             if_tightly_spaced (oper_stack_push StackSpace *> set_spacing_tight False)
             spacing <- Parsec.optionMaybe read_spaces
@@ -313,10 +313,8 @@ expect_term = do
 
 expect_infix_op :: CuteParser ASTree
 expect_infix_op = do
-    toke <- parse_token
+    toke <- parse_oper_token
     case toke of
-        LParen -> Parsec.unexpected "very bad lparen :("
-        Term _ -> Parsec.unexpected "very bad term"
         RParen -> do
             if_tightly_spaced find_left_space
             find_left_paren
