@@ -277,22 +277,7 @@ look_for thing = do
             StackSpace -> Parsec.parserFail "incorrectly spacing or parentheses"
 
 find_left_space :: CuteParser ()
-find_left_space = do
--- pop stuff off the oper_stack until you find a StackSpace
--- and finally set Tight to False
-    Oper_Stack op_stack <- get_op_stack
-    case op_stack of
-        [] -> Parsec.unexpected "incorrect spacing"
-        (tok:toks) -> case tok of
-            StackSpace -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack toks,s2,Tight False))
-            StackLParen -> Parsec.parserFail "FIXME this should be allowed"
-            StackLParenFollowedBySpace -> Parsec.parserFail "i feel like these should not be allowed actually"
-            (StackPreOp op) -> do
-                make_twig op toks
-                find_left_space
-            StackOp op -> do
-                make_branch op toks
-                find_left_space
+find_left_space = look_for StackSpace *> set_spacing_tight False
 
 if_loosely_spaced :: CuteParser () -> CuteParser ()
 if_loosely_spaced action = do
