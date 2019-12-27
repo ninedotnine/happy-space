@@ -123,6 +123,8 @@ oper_stack_push :: StackOp -> CuteParser ()
 oper_stack_push op =
     Parsec.modifyState (\(Oper_Stack ops, terms, b) -> (Oper_Stack (op:ops), terms, b))
 
+oper_stack_set :: [StackOp] -> CuteParser ()
+oper_stack_set tokes = Parsec.modifyState (\(_,s2,b) -> (Oper_Stack tokes, s2, b))
 
 tree_stack_push :: ASTree -> CuteParser ()
 tree_stack_push tree =
@@ -208,13 +210,13 @@ make_branch op tokes = do
     r <- tree_stack_pop
     l <- tree_stack_pop
     tree_stack_push (Branch op l r)
-    Parsec.modifyState (\(_,s2,b) -> (Oper_Stack tokes, s2, b))
+    oper_stack_set tokes
 
 make_twig :: PrefixOperator -> [StackOp] -> CuteParser ()
 make_twig op tokes = do
     tree <- tree_stack_pop
     tree_stack_push (Twig op tree)
-    Parsec.modifyState (\(_,s2,b) -> (Oper_Stack tokes, s2, b))
+    oper_stack_set tokes
 
 clean_stack :: CuteParser ()
 clean_stack = do
@@ -266,7 +268,7 @@ look_for thing = do
     case op_stack of
         [] -> Parsec.unexpected "right paren"
         (tok:toks) -> case tok of
-            t | t == thing -> Parsec.modifyState (\(_,s2,b) -> (Oper_Stack toks,s2,b)) *> return ()
+            t | t == thing -> oper_stack_set toks
             StackPreOp op -> do
                 make_twig op toks
                 look_for thing
@@ -332,7 +334,7 @@ expect_infix_op = do
             look_for StackLParen
             Oper_Stack stack_ops <- get_op_stack
             case stack_ops of
-                (StackSpace:ops) -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack ops, s2, Tight True))
+                (StackSpace:ops) -> oper_stack_set ops *> set_spacing_tight True
                 _ -> return ()
             expect_infix_op <|> finish_expr
         RParenAfterSpace -> do
@@ -340,7 +342,7 @@ expect_infix_op = do
             look_for StackLParenFollowedBySpace
             Oper_Stack stack_ops <- get_op_stack
             case stack_ops of
-                (StackSpace:ops) -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack ops, s2, Tight True))
+                (StackSpace:ops) -> oper_stack_set ops *> set_spacing_tight True
                 _ -> return ()
             expect_infix_op <|> finish_expr
         Oper op -> do
