@@ -289,19 +289,34 @@ if_tightly_spaced action = do
     Tight spaced <- get_tightness
     when spaced action
 
-
 parse_expression :: CuteParser ASTree
-parse_expression = do
+parse_expression = expect_term
+
+expect_term :: CuteParser ASTree
+expect_term = do
     -- shunting yard, returns a parse tree
     toke <- parse_token
     case toke of
+        RParen -> Parsec.unexpected "very bad RParen ):"
+        RParenAfterSpace -> Parsec.unexpected "very bad (spaced) RParen ):"
+        Oper _ -> Parsec.unexpected "very bad op"
         LParen -> do
             if_tightly_spaced (oper_stack_push StackSpace *> set_spacing_tight False)
             spacing <- Parsec.optionMaybe read_spaces
             case spacing of
                 Nothing -> oper_stack_push StackLParen
                 Just _  -> oper_stack_push StackLParenFollowedBySpace
-            parse_expression
+            expect_term
+        Term t -> do
+            tree_stack_push (Leaf t)
+            expect_infix_op <|> finish_expr
+
+expect_infix_op :: CuteParser ASTree
+expect_infix_op = do
+    toke <- parse_token
+    case toke of
+        LParen -> Parsec.unexpected "very bad lparen :("
+        Term _ -> Parsec.unexpected "very bad term"
         RParen -> do
             if_tightly_spaced find_left_space
             find_left_paren
@@ -309,7 +324,7 @@ parse_expression = do
             case stack_ops of
                 (StackSpace:ops) -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack ops, s2, Tight True))
                 _ -> return ()
-            parse_expression <|> finish_expr
+            expect_infix_op <|> finish_expr
         RParenAfterSpace -> do
             if_tightly_spaced find_left_space
             find_left_paren_spaced
@@ -317,12 +332,11 @@ parse_expression = do
             case stack_ops of
                 (StackSpace:ops) -> Parsec.modifyState (\(_,s2,_) -> (Oper_Stack ops, s2, Tight True))
                 _ -> return ()
-            parse_expression <|> finish_expr
-        Term t -> tree_stack_push (Leaf t) *> (parse_expression <|> finish_expr)
+            expect_infix_op <|> finish_expr
         Oper op -> do
             apply_higher_prec_ops (get_prec op)
             oper_stack_push (StackOp op)
-            parse_expression
+            expect_term
 
 
 pretty_show :: ASTree -> String
