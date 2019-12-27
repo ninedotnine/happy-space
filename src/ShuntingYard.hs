@@ -276,7 +276,7 @@ find_left_paren = do
 
 find_left_paren_spaced :: CuteParser ()
 find_left_paren_spaced = do
--- pop stuff off the oper_stack until you find a StackLParen
+-- pop stuff off the oper_stack until you find a StackLParenFollowedBySpace
     Oper_Stack op_stack <- get_op_stack
     case op_stack of
         [] -> Parsec.unexpected "right paren"
