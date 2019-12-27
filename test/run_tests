@@ -49,6 +49,7 @@ main() {
     run_cmd_in_subdir "bin/hs_expr" "test/whitespace_tests/"
     run_cmd_in_subdir "bin/hs_expr" "test/whitespace_free_tests/"
     run_cmd_in_subdir "bin/hs_expr" "test/new_whitespace_tests"
+    run_cmd_in_subdir "bin/hs_expr" "test/prefix_ops"
     echo "=== all expression parser tests passed :^)"
 
     echo "=== now checking invalid inputs..."

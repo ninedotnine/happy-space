@@ -2,7 +2,8 @@
 
 this is an infix expression parser. it supports
 
-* the operations `+`, `-`, `*`, `/`, `%`, `^`
+* the infix operations `+`, `-`, `*`, `/`, `%`, `^`
+* the prefix operators `~` (negate) and `!` (factorial)
 * conventional operator precendence
 * parentheses
 * whitespace precedence
