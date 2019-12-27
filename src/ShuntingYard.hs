@@ -46,7 +46,6 @@ data ASTree = Branch Operator ASTree ASTree
             | Leaf Integer
          deriving Show
 
-newtype Oper_Stack = Oper_Stack [StackOp] deriving Show
 data StackOp = StackLParen
              | StackLParenFollowedBySpace
              | StackSpace
@@ -65,6 +64,8 @@ data Operator = Plus
 data PrefixOperator = Negate
                     | Explode
                     deriving Eq
+
+newtype Oper_Stack = Oper_Stack [StackOp] deriving Show
 
 newtype Tree_Stack = Tree_Stack [ASTree] deriving Show
 
