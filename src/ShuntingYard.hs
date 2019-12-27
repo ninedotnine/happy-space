@@ -132,10 +132,13 @@ set_spacing_tight :: Bool -> CuteParser ()
 set_spacing_tight b = Parsec.modifyState (\(s1,s2,_) -> (s1, s2, Tight b))
 
 read_spaces :: CuteParser ()
-read_spaces = Parsec.many1 (Parsec.char ' ') *> return ()
+read_spaces = Parsec.skipMany1 silent_space
 
 ignore_spaces :: CuteParser ()
-ignore_spaces = Parsec.many (Parsec.char ' ') *> return ()
+ignore_spaces = Parsec.skipMany silent_space
+
+silent_space :: CuteParser Char
+silent_space = Parsec.char ' ' <?> ""
 
 parse_num :: CuteParser TermToken
 parse_num = Term <$> read <$> Parsec.many1 Parsec.digit
@@ -159,10 +162,10 @@ parse_oper_symbol =
     Parsec.char '*' *> return Splat  <|>
     Parsec.char '/' *> return Divide <|>
     Parsec.char '%' *> return Modulo <|>
-    Parsec.char '^' *> return Hihat
+    Parsec.char '^' *> return Hihat <?> "infix operator"
 
 no_spaces :: String -> CuteParser ()
-no_spaces failmsg = Parsec.try ((Parsec.try (Parsec.char ' ') *> Parsec.unexpected failmsg) <|> return ())
+no_spaces failmsg = Parsec.try ((Parsec.try silent_space *> Parsec.unexpected failmsg) <|> return ())
 
 parse_left_paren :: CuteParser TermToken
 parse_left_paren = do
@@ -201,8 +204,8 @@ clean_stack = do
 finish_expr :: CuteParser ASTree
 finish_expr = do
     ignore_spaces
-    Parsec.optional Parsec.newline
-    Parsec.eof
+    Parsec.optional Parsec.newline <?> ""
+    Parsec.eof <?> ""
     clean_stack
     Tree_Stack tree <- get_tree_stack
     case tree of
@@ -288,7 +291,7 @@ check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf val
     where valid_op_chars = "+-*/%^"
 
 parse_oper_token :: CuteParser OperToken
-parse_oper_token = (check_for_oper *> parse_oper) <|> parse_right_paren
+parse_oper_token = (check_for_oper *> parse_oper) <|> parse_right_paren <?> "infix operator"
 
 parse_expression :: CuteParser ASTree
 parse_expression = expect_term
