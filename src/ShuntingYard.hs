@@ -118,7 +118,7 @@ get_tightness = do
     (_, _, tightness) <- Parsec.getState
     return tightness
 
--- stack functions
+-- functions to change or set the current state
 oper_stack_push :: StackOp -> CuteParser ()
 oper_stack_push op =
     Parsec.modifyState (\(Oper_Stack ops, terms, b) -> (Oper_Stack (op:ops), terms, b))
@@ -139,72 +139,10 @@ tree_stack_pop = do
             return v
         Tree_Stack _ -> Parsec.unexpected "?? did i expect a term?"
 
-
-begin_spaced_prec :: CuteParser ()
-begin_spaced_prec = do
-    if_loosely_spaced (oper_stack_push StackSpace)
-    set_spacing_tight True
-
-
 set_spacing_tight :: Bool -> CuteParser ()
 set_spacing_tight b = Parsec.modifyState (\(s1,s2,_) -> (s1, s2, Tight b))
 
-respect_spaces :: CuteParser ()
-respect_spaces = Parsec.skipMany1 silent_space
-
-ignore_spaces :: CuteParser ()
-ignore_spaces = Parsec.skipMany silent_space
-
-silent_space :: CuteParser Char
-silent_space = Parsec.char ' ' <?> ""
-
-parse_num :: CuteParser TermToken
-parse_num = Term <$> read <$> Parsec.many1 Parsec.digit
-
-parse_prefix_op :: CuteParser TermToken
-parse_prefix_op = PreOp <$> (
-    Parsec.char '!' *> return Explode <|>
-    Parsec.char '~' *> return Negate
-    ) <?> "prefix operator"
-
-parse_oper :: CuteParser OperToken
-parse_oper = do
-    spacing <- Parsec.optionMaybe respect_spaces
-    case spacing of
-        Nothing -> begin_spaced_prec
-        Just () -> do
-            if_tightly_spaced find_left_space
-    oper <- parse_oper_symbol
-    if_loosely_spaced (respect_spaces <?> "space after `" ++ show oper ++ "`")
-    if_tightly_spaced $ no_spaces ("whitespace after `" ++ show oper ++ "`")
-    return (Oper oper)
-
-parse_oper_symbol :: CuteParser Operator
-parse_oper_symbol =
-    Parsec.char '+' *> return Plus   <|>
-    Parsec.char '-' *> return Minus  <|>
-    Parsec.char '*' *> return Splat  <|>
-    Parsec.char '/' *> return Divide <|>
-    Parsec.char '%' *> return Modulo <|>
-    Parsec.char '^' *> return Hihat <?> "infix operator"
-
-no_spaces :: String -> CuteParser ()
-no_spaces failmsg = Parsec.try ((Parsec.try silent_space *> Parsec.unexpected failmsg) <|> return ())
-
-parse_left_paren :: CuteParser TermToken
-parse_left_paren = do
-    Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.char '(' *> return ()))
-    ignore_spaces *> Parsec.char '(' *> return LParen
-
-parse_right_paren :: CuteParser OperToken
-parse_right_paren = do
-    spacing <- Parsec.optionMaybe respect_spaces
-    _ <- Parsec.char ')'
-    return $ case spacing of
-        Nothing -> RParen
-        Just () -> RParenAfterSpace
-
-
+-- functions that build the ASTree
 make_branch :: Operator -> [StackOp] -> CuteParser ()
 make_branch op tokes = do
     r <- tree_stack_pop
@@ -218,6 +156,75 @@ make_twig op tokes = do
     tree_stack_push (Twig op tree)
     oper_stack_set tokes
 
+-- simple spacing-related parsers
+respect_spaces :: CuteParser ()
+respect_spaces = Parsec.skipMany1 silent_space
+
+ignore_spaces :: CuteParser ()
+ignore_spaces = Parsec.skipMany silent_space
+
+silent_space :: CuteParser Char
+silent_space = Parsec.char ' ' <?> ""
+
+no_spaces :: String -> CuteParser ()
+no_spaces failmsg = Parsec.try ((Parsec.try silent_space *> Parsec.unexpected failmsg) <|> return ())
+
+if_loosely_spaced :: CuteParser () -> CuteParser ()
+if_loosely_spaced action = do
+    Tight spaced <- get_tightness
+    when (not spaced) action
+
+if_tightly_spaced :: CuteParser () -> CuteParser ()
+if_tightly_spaced action = do
+    Tight spaced <- get_tightness
+    when spaced action
+
+-- term parsers
+parse_num :: CuteParser TermToken
+parse_num = Term <$> read <$> Parsec.many1 Parsec.digit
+
+parse_prefix_op :: CuteParser TermToken
+parse_prefix_op = PreOp <$> (
+    Parsec.char '!' *> return Explode <|>
+    Parsec.char '~' *> return Negate
+    ) <?> "prefix operator"
+
+parse_left_paren :: CuteParser TermToken
+parse_left_paren = do
+    Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.char '(' *> return ()))
+    ignore_spaces *> Parsec.char '(' *> return LParen
+
+-- oper parsers
+parse_infix_oper :: CuteParser OperToken
+parse_infix_oper = do
+    spacing <- Parsec.optionMaybe respect_spaces
+    case spacing of
+        Nothing -> do
+            if_loosely_spaced (oper_stack_push StackSpace)
+            set_spacing_tight True
+        Just () -> do
+            if_tightly_spaced find_left_space
+    oper <- parse_oper_symbol
+    if_loosely_spaced (respect_spaces <?> "space after `" ++ show oper ++ "`")
+    if_tightly_spaced $ no_spaces ("whitespace after `" ++ show oper ++ "`")
+    return (Oper oper)
+    where parse_oper_symbol =
+            Parsec.char '+' *> return Plus   <|>
+            Parsec.char '-' *> return Minus  <|>
+            Parsec.char '*' *> return Splat  <|>
+            Parsec.char '/' *> return Divide <|>
+            Parsec.char '%' *> return Modulo <|>
+            Parsec.char '^' *> return Hihat <?> "infix operator"
+
+parse_right_paren :: CuteParser OperToken
+parse_right_paren = do
+    spacing <- Parsec.optionMaybe respect_spaces
+    _ <- Parsec.char ')'
+    return $ case spacing of
+        Nothing -> RParen
+        Just () -> RParenAfterSpace
+
+-- for finishing up at the end
 clean_stack :: CuteParser ()
 clean_stack = do
     if_tightly_spaced find_left_space
@@ -231,7 +238,6 @@ clean_stack = do
             make_branch op tokes
             clean_stack
         _ -> Parsec.parserFail "incorrect whitespace or parens?"
-
 
 finish_expr :: CuteParser ASTree
 finish_expr = do
@@ -254,7 +260,7 @@ apply_higher_prec_ops current = do
             StackSpace -> return ()
             StackLParen -> return ()
             StackLParenFollowedBySpace -> return ()
-            (StackPreOp op) -> make_twig op toks
+            StackPreOp op -> make_twig op toks
             StackOp op -> case (get_prec op `compare` current) of
                 LT -> return ()
                 _ -> do
@@ -282,16 +288,6 @@ look_for thing = do
 find_left_space :: CuteParser ()
 find_left_space = look_for StackSpace *> set_spacing_tight False
 
-if_loosely_spaced :: CuteParser () -> CuteParser ()
-if_loosely_spaced action = do
-    Tight spaced <- get_tightness
-    when (not spaced) action
-
-if_tightly_spaced :: CuteParser () -> CuteParser ()
-if_tightly_spaced action = do
-    Tight spaced <- get_tightness
-    when spaced action
-
 parse_term_token :: CuteParser TermToken
 parse_term_token = parse_num <|> parse_left_paren <|> parse_prefix_op
 
@@ -300,13 +296,10 @@ check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf val
     where valid_op_chars = "+-*/%^"
 
 parse_oper_token :: CuteParser OperToken
-parse_oper_token = (check_for_oper *> parse_oper) <|> parse_right_paren <?> "infix operator"
+parse_oper_token = (check_for_oper *> parse_infix_oper) <|> parse_right_paren <?> "infix operator"
 
-parse_expression :: CuteParser ASTree
-parse_expression = expect_term
-
-expect_term :: CuteParser ASTree
-expect_term = do
+parse_term :: CuteParser ASTree
+parse_term = do
     -- shunting yard, returns a parse tree
     toke <- parse_term_token
     case toke of
@@ -316,17 +309,16 @@ expect_term = do
             case spacing of
                 Nothing -> oper_stack_push StackLParen
                 Just _  -> oper_stack_push StackLParenFollowedBySpace
-            expect_term
+            parse_term
         Term t -> do
             tree_stack_push (Leaf t)
-            expect_infix_op <|> finish_expr
+            parse_oper <|> finish_expr
         PreOp op -> do
             oper_stack_push (StackPreOp op)
---             tree_stack_push (Twig op)
-            expect_term
+            parse_term
 
-expect_infix_op :: CuteParser ASTree
-expect_infix_op = do
+parse_oper :: CuteParser ASTree
+parse_oper = do
     toke <- parse_oper_token
     case toke of
         RParen -> do
@@ -336,7 +328,7 @@ expect_infix_op = do
             case stack_ops of
                 (StackSpace:ops) -> oper_stack_set ops *> set_spacing_tight True
                 _ -> return ()
-            expect_infix_op <|> finish_expr
+            parse_oper <|> finish_expr
         RParenAfterSpace -> do
             if_tightly_spaced find_left_space
             look_for StackLParenFollowedBySpace
@@ -344,17 +336,20 @@ expect_infix_op = do
             case stack_ops of
                 (StackSpace:ops) -> oper_stack_set ops *> set_spacing_tight True
                 _ -> return ()
-            expect_infix_op <|> finish_expr
+            parse_oper <|> finish_expr
         Oper op -> do
             apply_higher_prec_ops (get_prec op)
             oper_stack_push (StackOp op)
-            expect_term
+            parse_term
 
-
+-- these are little utilities, unrelated to parsing
 pretty_show :: ASTree -> String
 pretty_show (Branch oper left right) = concat ["(", show oper, " ", pretty_show left, " ", pretty_show right, ")"]
 pretty_show (Twig oper tree) = concat ["(", show oper, " ", pretty_show tree, ")"]
 pretty_show (Leaf val) = show val
+
+parse_expression :: CuteParser ASTree
+parse_expression = parse_term
 
 run_shunting_yard :: Text -> Either Parsec.ParseError ASTree
 run_shunting_yard input = Parsec.runParser parse_expression start_state "input" (trim_spaces input)
