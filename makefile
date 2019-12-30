@@ -8,7 +8,6 @@ default: build
 
 build:
 	@mkdir -p $(OUT_DIR) $(HI_DIR) $(OBJ_DIR)
-# 	gcc $(CFLAGS) -o $(OUT_DIR)/expr src/shunting_yard.c
 	ghc $(HSFLAGS) -o $(OUT_DIR)/hs_expr src/{Main.hs,ShuntingYard.hs}
 
 .PHONY: clean
