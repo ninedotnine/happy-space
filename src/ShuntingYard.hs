@@ -289,7 +289,7 @@ look_for thing = do
                 look_for thing
             StackLParen -> Parsec.parserFail "incorrectly spaced parentheses"
             StackLParenFollowedBySpace -> Parsec.parserFail "incorrectly spaced parentheses"
-            StackSpace -> Parsec.parserFail "incorrectly spacing or parentheses"
+            StackSpace -> Parsec.parserFail "incorrect spacing or parentheses"
 
 find_left_space :: CuteParser ()
 find_left_space = look_for StackSpace *> set_spacing_tight False
