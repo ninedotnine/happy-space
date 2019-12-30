@@ -184,10 +184,13 @@ parse_num :: CuteParser TermToken
 parse_num = Term <$> read <$> Parsec.many1 Parsec.digit
 
 parse_prefix_op :: CuteParser TermToken
-parse_prefix_op = PreOp <$> (
-    Parsec.char '!' *> return Explode <|>
-    Parsec.char '~' *> return Negate
-    ) <?> "prefix operator"
+parse_prefix_op = do
+    oper <- parse_oper_symbol
+    no_spaces $ "whitespace after prefix oper " ++ show oper
+    return (PreOp oper)
+    where parse_oper_symbol =
+            Parsec.char '!' *> return Explode <|>
+            Parsec.char '~' *> return Negate <?> "prefix operator"
 
 parse_left_paren :: CuteParser TermToken
 parse_left_paren = do
@@ -260,7 +263,10 @@ apply_higher_prec_ops current = do
             StackSpace -> return ()
             StackLParen -> return ()
             StackLParenFollowedBySpace -> return ()
-            StackPreOp op -> make_twig op toks
+            StackPreOp _ -> do
+                undefined -- can this case ever occur?
+--                 make_twig op toks
+--                 apply_higher_prec_ops current
             StackOp op -> case (get_prec op `compare` current) of
                 LT -> return ()
                 _ -> do
@@ -295,8 +301,22 @@ check_for_oper :: CuteParser ()
 check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf valid_op_chars)) *> return ()
     where valid_op_chars = "+-*/%^"
 
+apply_prefix_opers :: CuteParser ()
+apply_prefix_opers = do
+    Oper_Stack op_stack <- get_op_stack
+    case op_stack of
+        [] -> return ()
+        (tok:toks) -> case tok of
+            StackPreOp op -> do
+                make_twig op toks
+                apply_prefix_opers
+            _ -> return ()
+
 parse_oper_token :: CuteParser OperToken
-parse_oper_token = (check_for_oper *> parse_infix_oper) <|> parse_right_paren <?> "infix operator"
+parse_oper_token =
+    (check_for_oper *> apply_prefix_opers *> parse_infix_oper)
+    <|> parse_right_paren
+    <?> "infix operator"
 
 parse_term :: CuteParser ASTree
 parse_term = do
