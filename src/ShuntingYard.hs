@@ -33,7 +33,8 @@ import Control.Monad (when)
 newtype Precedence = Precedence Integer deriving (Eq, Ord)
 
 data TermToken = Term Integer
-               | PreOp PrefixOperator
+               | TightPreOp PrefixOperator
+               | SpacedPreOp PrefixOperator
                | LParen
 
 data OperToken = Oper Operator
@@ -50,7 +51,8 @@ data StackOp = StackLParen
              | StackLParenFollowedBySpace
              | StackSpace
              | StackOp Operator
-             | StackPreOp PrefixOperator
+             | StackSpacedPreOp PrefixOperator
+             | StackTightPreOp PrefixOperator
              deriving (Show, Eq)
 
 data Operator = Plus
@@ -186,8 +188,10 @@ parse_num = Term <$> read <$> Parsec.many1 Parsec.digit
 parse_prefix_op :: CuteParser TermToken
 parse_prefix_op = do
     oper <- parse_oper_symbol
-    no_spaces $ "whitespace after prefix oper " ++ show oper
-    return (PreOp oper)
+    spacing <- Parsec.optionMaybe respect_spaces
+    case spacing of
+        Nothing -> return (TightPreOp oper)
+        Just () -> return (SpacedPreOp oper)
     where parse_oper_symbol =
             Parsec.char '!' *> return Explode <|>
             Parsec.char '~' *> return Negate <?> "prefix operator"
@@ -234,7 +238,10 @@ clean_stack = do
     Oper_Stack op_stack <- get_op_stack
     case op_stack of
         [] -> return ()
-        (StackPreOp op:tokes) -> do
+        (StackTightPreOp op:tokes) -> do
+            make_twig op tokes
+            clean_stack
+        (StackSpacedPreOp op:tokes) -> do
             make_twig op tokes
             clean_stack
         (StackOp op:tokes) -> do
@@ -263,10 +270,13 @@ apply_higher_prec_ops current = do
             StackSpace -> return ()
             StackLParen -> return ()
             StackLParenFollowedBySpace -> return ()
-            StackPreOp _ -> do
+            StackTightPreOp _ -> do
                 undefined -- can this case ever occur?
 --                 make_twig op toks
 --                 apply_higher_prec_ops current
+            StackSpacedPreOp op -> do
+                make_twig op toks
+                apply_higher_prec_ops current
             StackOp op -> case (get_prec op `compare` current) of
                 LT -> return ()
                 _ -> do
@@ -281,9 +291,11 @@ look_for thing = do
         [] -> Parsec.unexpected "right paren"
         (tok:toks) -> case tok of
             t | t == thing -> oper_stack_set toks
-            StackPreOp op -> do
+            StackTightPreOp op -> do
                 make_twig op toks
                 look_for thing
+            StackSpacedPreOp _ -> do
+                undefined -- can this case ever occur?
             StackOp op -> do
                 make_branch op toks
                 look_for thing
@@ -301,20 +313,20 @@ check_for_oper :: CuteParser ()
 check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf valid_op_chars)) *> return ()
     where valid_op_chars = "+-*/%^"
 
-apply_prefix_opers :: CuteParser ()
-apply_prefix_opers = do
+apply_tight_prefix_opers :: CuteParser ()
+apply_tight_prefix_opers = do
     Oper_Stack op_stack <- get_op_stack
     case op_stack of
         [] -> return ()
         (tok:toks) -> case tok of
-            StackPreOp op -> do
+            StackTightPreOp op -> do
                 make_twig op toks
-                apply_prefix_opers
+                apply_tight_prefix_opers
             _ -> return ()
 
 parse_oper_token :: CuteParser OperToken
 parse_oper_token =
-    (check_for_oper *> apply_prefix_opers *> parse_infix_oper)
+    (check_for_oper *> apply_tight_prefix_opers *> parse_infix_oper)
     <|> parse_right_paren
     <?> "infix operator"
 
@@ -333,8 +345,11 @@ parse_term = do
         Term t -> do
             tree_stack_push (Leaf t)
             parse_oper <|> finish_expr
-        PreOp op -> do
-            oper_stack_push (StackPreOp op)
+        TightPreOp op -> do
+            oper_stack_push (StackTightPreOp op)
+            parse_term
+        SpacedPreOp op -> do
+            oper_stack_push (StackSpacedPreOp op)
             parse_term
 
 parse_oper :: CuteParser ASTree
