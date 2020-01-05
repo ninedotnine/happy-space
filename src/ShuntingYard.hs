@@ -294,8 +294,9 @@ look_for thing = do
             StackTightPreOp op -> do
                 make_twig op toks
                 look_for thing
-            StackSpacedPreOp _ -> do
-                undefined -- can this case ever occur?
+            StackSpacedPreOp op -> do
+                make_twig op toks
+                look_for thing
             StackOp op -> do
                 make_branch op toks
                 look_for thing
