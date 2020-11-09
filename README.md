@@ -16,7 +16,9 @@ this is an infix expression parser. it supports
 
 ## to build
 
-run `make` in the top level of the repo. this will create `bin/hs_expr`.
+run `make` in the top level of the repo. this will create `bin/hs_calc`.
+
+if you experience problems with linking, you can try `make HSFLAGS=-static`.
 
 you can also `make test`, if you have the appropriate dependencies.
 

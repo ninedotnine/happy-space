@@ -1,14 +1,19 @@
-OUT_DIR = bin
-HI_DIR = cache/hi_files
-OBJ_DIR = cache/obj_files
-HSFLAGS = -Wall -dynamic -j -hidir $(HI_DIR) -odir $(OBJ_DIR)
-CFLAGS = -std=c11 -Wall -Wextra -O3
+SHELL := /bin/sh
+OUT_DIR := bin
+OUT_EXE := $(OUT_DIR)/hscalc
+HI_DIR := cache/hi_files
+OBJ_DIR := cache/obj_files
+HSFLAGS := -Wall -dynamic -j -XStrict
+GHCFLAGS := -hidir $(HI_DIR) -odir $(OBJ_DIR)
 
-default: build
+.PHONY: default
+default: $(OUT_EXE)
 
-build:
-	@mkdir -p $(OUT_DIR) $(HI_DIR) $(OBJ_DIR)
-	ghc $(HSFLAGS) -o $(OUT_DIR)/hs_expr src/{Main.hs,ShuntingYard.hs}
+$(OUT_EXE): src/*.hs | $(OUT_DIR) $(HI_DIR) $(OBJ_DIR)
+	ghc $(HSFLAGS) $(GHCFLAGS) -o $@ src/*.hs
+
+$(OUT_DIR) $(HI_DIR) $(OBJ_DIR):
+	mkdir -p $@
 
 .PHONY: clean
 clean:
