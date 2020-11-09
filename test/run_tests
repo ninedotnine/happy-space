@@ -1,5 +1,7 @@
 #!/usr/bin/dash
 
+out_exe="$1"
+
 run_cmd_in_subdir() {
     local cmd="$1"
     local subdir="$2"
@@ -41,19 +43,16 @@ run_failing_cmd_in_subdir() {
 main() {
     echo "=== testing expression parser... "
 
-#     run_cmd_in_subdir "bin/expr" "test/tests"
-#     run_cmd_in_subdir "bin/expr" "test/new_tests"
-# #     run_cmd_in_subdir "bin/expr" "test/whitespace_tests/"
-    run_cmd_in_subdir "bin/hs_expr" "test/tests"
-    run_cmd_in_subdir "bin/hs_expr" "test/new_tests"
-    run_cmd_in_subdir "bin/hs_expr" "test/whitespace_tests/"
-    run_cmd_in_subdir "bin/hs_expr" "test/whitespace_free_tests/"
-    run_cmd_in_subdir "bin/hs_expr" "test/new_whitespace_tests"
-    run_cmd_in_subdir "bin/hs_expr" "test/prefix_ops"
+    run_cmd_in_subdir "$out_exe" "test/tests"
+    run_cmd_in_subdir "$out_exe" "test/new_tests"
+    run_cmd_in_subdir "$out_exe" "test/whitespace_tests/"
+    run_cmd_in_subdir "$out_exe" "test/whitespace_free_tests/"
+    run_cmd_in_subdir "$out_exe" "test/new_whitespace_tests"
+    run_cmd_in_subdir "$out_exe" "test/prefix_ops"
     echo "=== all expression parser tests passed :^)"
 
     echo "=== now checking invalid inputs..."
-    run_failing_cmd_in_subdir "bin/hs_expr" "test/new_failing_tests"
+    run_failing_cmd_in_subdir "$out_exe" "test/new_failing_tests"
     echo "=== all bad tests failed :^)"
 }
 

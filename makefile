@@ -20,6 +20,6 @@ clean:
 	rm -fr $(OUT_DIR) $(HI_DIR) $(OBJ_DIR)
 
 .PHONY: test
-test: build
-	@test/run_tests
+test: $(OUT_EXE)
+	@test/run_tests $(OUT_EXE)
 	@echo "all tests passing! :^D"
