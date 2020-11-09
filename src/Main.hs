@@ -1,11 +1,12 @@
 module Main where
-import Control.Monad (forever, unless)
+import Control.Monad (unless)
+import Control.Monad.Trans (liftIO)
 import Data.Char (isSpace)
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
+import System.Console.Haskeline (runInputT, defaultSettings, getInputLine)
+import qualified Data.Text as Text (pack)
+import qualified Data.Text.IO as Text (getContents)
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
-import System.IO (hFlush, stdout)
 
 import ShuntingYard
 
@@ -18,12 +19,16 @@ main = do
         _     -> parse_all args
 
 repl :: IO ()
-repl = forever $ do
-    putStr "> "
-    hFlush stdout
-    input <- Text.getLine
-    unless (Text.all isSpace input) (parse_eval_print input)
+repl = runInputT defaultSettings loop where
+    loop = do
+        m_input <- getInputLine "> "
+        case m_input of
+            Nothing -> pure ()
+            Just input -> liftIO (pep input) >> loop
 
+pep :: String -> IO ()
+pep line = unless (all isSpace line) (parse_eval_print (Text.pack line))
+--
 parse_stdin :: IO ()
 parse_stdin = do
     input <- Text.getContents
