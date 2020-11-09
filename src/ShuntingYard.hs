@@ -108,17 +108,17 @@ get_prec Hihat  = Precedence 8
 get_op_stack :: CuteParser Oper_Stack
 get_op_stack = do
     (stack, _, _) <- Parsec.getState
-    return stack
+    pure stack
 
 get_tree_stack :: CuteParser Tree_Stack
 get_tree_stack = do
     (_, stack, _) <- Parsec.getState
-    return stack
+    pure stack
 
 get_tightness :: CuteParser Tightness
 get_tightness = do
     (_, _, tightness) <- Parsec.getState
-    return tightness
+    pure tightness
 
 -- functions to change or set the current state
 oper_stack_push :: StackOp -> CuteParser ()
@@ -138,7 +138,7 @@ tree_stack_pop = do
     case vals of
         Tree_Stack (v:vs) -> do
             Parsec.setState (opers, Tree_Stack vs, b)
-            return v
+            pure v
         Tree_Stack _ -> Parsec.unexpected "?? did i expect a term?"
 
 set_spacing_tight :: Bool -> CuteParser ()
@@ -169,7 +169,7 @@ silent_space :: CuteParser Char
 silent_space = Parsec.char ' ' <?> ""
 
 no_spaces :: String -> CuteParser ()
-no_spaces failmsg = Parsec.try ((Parsec.try silent_space *> Parsec.unexpected failmsg) <|> return ())
+no_spaces failmsg = Parsec.try ((Parsec.try silent_space *> Parsec.unexpected failmsg) <|> pure ())
 
 if_loosely_spaced :: CuteParser () -> CuteParser ()
 if_loosely_spaced action = do
@@ -190,16 +190,16 @@ parse_prefix_op = do
     oper <- parse_oper_symbol
     spacing <- Parsec.optionMaybe respect_spaces
     case spacing of
-        Nothing -> return (TightPreOp oper)
-        Just () -> return (SpacedPreOp oper)
+        Nothing -> pure (TightPreOp oper)
+        Just () -> pure (SpacedPreOp oper)
     where parse_oper_symbol =
-            Parsec.char '!' *> return Explode <|>
-            Parsec.char '~' *> return Negate <?> "prefix operator"
+            Parsec.char '!' *> pure Explode <|>
+            Parsec.char '~' *> pure Negate <?> "prefix operator"
 
 parse_left_paren :: CuteParser TermToken
 parse_left_paren = do
-    Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.char '(' *> return ()))
-    ignore_spaces *> Parsec.char '(' *> return LParen
+    Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.char '(' *> pure ()))
+    ignore_spaces *> Parsec.char '(' *> pure LParen
 
 -- oper parsers
 parse_infix_oper :: CuteParser OperToken
@@ -214,20 +214,20 @@ parse_infix_oper = do
     oper <- parse_oper_symbol
     if_loosely_spaced (respect_spaces <?> "space after `" ++ show oper ++ "`")
     if_tightly_spaced $ no_spaces ("whitespace after `" ++ show oper ++ "`")
-    return (Oper oper)
+    pure (Oper oper)
     where parse_oper_symbol =
-            Parsec.char '+' *> return Plus   <|>
-            Parsec.char '-' *> return Minus  <|>
-            Parsec.char '*' *> return Splat  <|>
-            Parsec.char '/' *> return Divide <|>
-            Parsec.char '%' *> return Modulo <|>
-            Parsec.char '^' *> return Hihat <?> "infix operator"
+            Parsec.char '+' *> pure Plus   <|>
+            Parsec.char '-' *> pure Minus  <|>
+            Parsec.char '*' *> pure Splat  <|>
+            Parsec.char '/' *> pure Divide <|>
+            Parsec.char '%' *> pure Modulo <|>
+            Parsec.char '^' *> pure Hihat <?> "infix operator"
 
 parse_right_paren :: CuteParser OperToken
 parse_right_paren = do
     spacing <- Parsec.optionMaybe respect_spaces
     _ <- Parsec.char ')'
-    return $ case spacing of
+    pure $ case spacing of
         Nothing -> RParen
         Just () -> RParenAfterSpace
 
@@ -237,7 +237,7 @@ clean_stack = do
     if_tightly_spaced find_left_space
     Oper_Stack op_stack <- get_op_stack
     case op_stack of
-        [] -> return ()
+        [] -> pure ()
         (StackTightPreOp op:tokes) -> do
             make_twig op tokes
             clean_stack
@@ -258,18 +258,18 @@ finish_expr = do
     Tree_Stack tree <- get_tree_stack
     case tree of
         [] -> Parsec.parserFail "bad expression"
-        (result:[]) -> return result
+        (result:[]) -> pure result
         _ -> Parsec.parserFail "invalid expression, something is wrong here."
 
 apply_higher_prec_ops :: Precedence -> CuteParser ()
 apply_higher_prec_ops current = do
     Oper_Stack op_stack <- get_op_stack
     case op_stack of
-        [] -> return ()
+        [] -> pure ()
         (tok:toks) -> case tok of
-            StackSpace -> return ()
-            StackLParen -> return ()
-            StackLParenFollowedBySpace -> return ()
+            StackSpace -> pure ()
+            StackLParen -> pure ()
+            StackLParenFollowedBySpace -> pure ()
             StackTightPreOp _ -> do
                 undefined -- can this case ever occur?
 --                 make_twig op toks
@@ -278,7 +278,7 @@ apply_higher_prec_ops current = do
                 make_twig op toks
                 apply_higher_prec_ops current
             StackOp op -> case (get_prec op `compare` current) of
-                LT -> return ()
+                LT -> pure ()
                 _ -> do
                     make_branch op toks
                     apply_higher_prec_ops current
@@ -311,19 +311,19 @@ parse_term_token :: CuteParser TermToken
 parse_term_token = parse_num <|> parse_left_paren <|> parse_prefix_op
 
 check_for_oper :: CuteParser ()
-check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf valid_op_chars)) *> return ()
+check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf valid_op_chars)) *> pure ()
     where valid_op_chars = "+-*/%^"
 
 apply_tight_prefix_opers :: CuteParser ()
 apply_tight_prefix_opers = do
     Oper_Stack op_stack <- get_op_stack
     case op_stack of
-        [] -> return ()
+        [] -> pure ()
         (tok:toks) -> case tok of
             StackTightPreOp op -> do
                 make_twig op toks
                 apply_tight_prefix_opers
-            _ -> return ()
+            _ -> pure ()
 
 parse_oper_token :: CuteParser OperToken
 parse_oper_token =
@@ -363,7 +363,7 @@ parse_oper = do
             Oper_Stack stack_ops <- get_op_stack
             case stack_ops of
                 (StackSpace:ops) -> oper_stack_set ops *> set_spacing_tight True
-                _ -> return ()
+                _ -> pure ()
             parse_oper <|> finish_expr
         RParenAfterSpace -> do
             if_tightly_spaced find_left_space
@@ -371,7 +371,7 @@ parse_oper = do
             Oper_Stack stack_ops <- get_op_stack
             case stack_ops of
                 (StackSpace:ops) -> oper_stack_set ops *> set_spacing_tight True
-                _ -> return ()
+                _ -> pure ()
             parse_oper <|> finish_expr
         Oper op -> do
             apply_higher_prec_ops (get_prec op)
