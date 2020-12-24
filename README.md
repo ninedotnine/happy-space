@@ -1,6 +1,6 @@
-# happy-space expression parser
+# happy-space
 
-this is an infix expression parser. it supports
+this is an calculator. it supports
 
 * the infix operations `+`, `-`, `*`, `/`, `%`, `^`
 * the prefix operators `~` (negate) and `!` (factorial)
@@ -22,11 +22,10 @@ if you experience problems with linking, you can try `make HSFLAGS=-static`.
 
 you can also `make test`, if you have the appropriate dependencies.
 
-
 ## to run
 
-there are three ways to invoke `hs_expr`:
+there are three ways to invoke `hscalc`:
 
-* running `hs_expr` will produce an interactive repl;
-* `hs_expr "1+2"` will parse all the expressions passed as arguments;
-* `hs_expr -` reads once from standard in and parses that.
+* running `hscalc` will produce an interactive repl;
+* `hscalc "1+2"` will evaluated all the expressions passed as arguments;
+* `hscalc -` reads once from standard in and parses that.
