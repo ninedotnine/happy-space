@@ -41,7 +41,7 @@ expecting space after `+`
 
 ## to build
 
-run `make` in the top level of the repo. this will create `bin/hs_calc`.
+run `make` in the top level of the repo. this will create `bin/hscalc`.
 
 if you experience problems with linking, you can try `make HSFLAGS=-static`.
 
