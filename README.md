@@ -52,5 +52,5 @@ you can also `make test`, if you have the appropriate dependencies.
 there are three ways to invoke `hscalc`:
 
 * running `hscalc` will produce an interactive repl;
-* `hscalc "1+2"` will evaluated all the expressions passed as arguments;
-* `hscalc -` reads once from standard in and parses that.
+* `hscalc "1+2"` will evaluate all the expressions passed as arguments;
+* `hscalc -` will read once from standard input and evaluate that.
