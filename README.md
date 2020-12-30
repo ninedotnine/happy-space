@@ -1,12 +1,37 @@
 # happy-space
 
-this is an calculator. it supports
+this is a command-line calculator. it supports
 
 * the infix operations `+`, `-`, `*`, `/`, `%`, `^`
 * the prefix operators `~` (negate) and `!` (factorial)
 * conventional operator precendence
 * parentheses
 * whitespace precedence
+
+## whitespace precedence?
+
+that's right!
+
+```
+> 3+6/3
+5
+> 3 + 6/3
+5
+> 3+6 / 3
+3
+```
+
+but:
+
+```
+> 1+ 2
+"input" (line 1, column 4):
+unexpected whitespace after `+`
+> 1 +2
+"input" (line 1, column 4):
+unexpected "2"
+expecting space after `+`
+```
 
 ## dependencies
 
