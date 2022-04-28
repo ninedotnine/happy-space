@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 module Main where
 import Control.Monad (unless)
 import Control.Monad.Trans (liftIO)
@@ -12,11 +13,10 @@ import ShuntingYard
 
 main :: IO ()
 main = do
-    args <- getArgs
-    case args of
+    getArgs >>= \case
         []    -> repl
         ["-"] -> parse_stdin
-        _     -> parse_all args
+        args  -> parse_all args
 
 repl :: IO ()
 repl = runInputT defaultSettings loop where
