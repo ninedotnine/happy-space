@@ -49,6 +49,7 @@ main() {
     run_cmd_in_subdir "$out_exe" "test/whitespace_free_tests/"
     run_cmd_in_subdir "$out_exe" "test/new_whitespace_tests"
     run_cmd_in_subdir "$out_exe" "test/prefix_ops"
+    run_cmd_in_subdir "$out_exe" "test/rational"
     echo "=== all expression parser tests passed :^)"
 
     echo "=== now checking invalid inputs..."

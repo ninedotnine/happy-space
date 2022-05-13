@@ -3,6 +3,9 @@
 -- it does not make any attempt at associativity, although this is possible.
 -- it gives higher precedence to operators which are not separated by spaces.
 
+
+{-# LANGUAGE OverloadedStrings #-}
+
 module ShuntingYard (
     pretty_show,
     run_shunting_yard,
@@ -17,10 +20,17 @@ import Text.Parsec (Parsec, (<|>), (<?>))
 
 -- for trim_spaces
 import Data.Char (isSpace)
+
+import Data.Fixed (mod')
+
 import Data.Functor ((<&>))
+import Data.Function ((&))
+
+import Data.Ratio (numerator, denominator)
 
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Text.Read as Read (rational)
 
 import Control.Monad (when)
 
@@ -32,7 +42,7 @@ import Control.Monad (when)
 
 newtype Precedence = Precedence Integer deriving (Eq, Ord)
 
-data TermToken = Term Integer
+data TermToken = Term Rational
                | TightPreOp PrefixOperator
                | SpacedPreOp PrefixOperator
                | LParen
@@ -44,7 +54,7 @@ data OperToken = Oper Operator
 
 data ASTree = Branch Operator ASTree ASTree
             | Twig PrefixOperator ASTree
-            | Leaf Integer
+            | Leaf Rational
          deriving Show
 
 data StackOp = StackLParen
@@ -183,7 +193,19 @@ if_tightly_spaced action = do
 
 -- term parsers
 parse_num :: CuteParser TermToken
-parse_num = Term <$> read <$> Parsec.many1 Parsec.digit
+parse_num = do
+    integer <- Parsec.many1 Parsec.digit <&> Text.pack
+    mantissa <- Parsec.option ""
+        (Parsec.string "." <> Parsec.many1 Parsec.digit)
+        <&> Text.pack
+    case (integer <> mantissa) & Read.rational of
+        Right (num, "") -> pure $ Term num
+        -- these cases should be unreachable:
+        -- `integer` can only contain digits;
+        -- `mantissa` can only contain a dot then digits (or be empty)
+        -- i can think of no reason why this should fail to parse.
+        Right _ -> error "unreachable"
+        Left _ -> error "unreachable"
 
 parse_prefix_op :: CuteParser TermToken
 parse_prefix_op = do
@@ -398,7 +420,7 @@ print_shunting_yard input = case run_shunting_yard input of
     Left err -> putStrLn (show err)
     Right tree -> putStrLn (pretty_show tree)
 
-evaluate :: ASTree -> Integer
+evaluate :: ASTree -> Rational
 evaluate (Leaf x) = x
 evaluate (Twig op tree) = operate (evaluate tree)
     where operate = case op of
@@ -409,12 +431,21 @@ evaluate (Branch op left right) = evaluate left `operate` evaluate right
             Plus   -> (+)
             Minus  -> (-)
             Splat  -> (*)
-            Divide -> div
-            Modulo -> mod
-            Hihat  -> (^)
+            Divide -> (/)
+            Modulo -> mod'
+            -- FIXME
+            -- exponents that are non-integral would be a nice feature.
+            -- this implementation treats `x^2` and `x^2.8` as equal
+            Hihat  -> \x y ->
+                (x ^^ (floor y :: Integer)) & toRational
 
 eval_show :: ASTree -> String
-eval_show = evaluate <&> show
+eval_show = evaluate <&> show_rational
+
+show_rational :: Rational -> String
+show_rational n = if denominator n == 1
+    then show (numerator n)
+    else show (fromRational n :: Double)
 
 parse_eval_print :: Text -> IO ()
 parse_eval_print input = case run_shunting_yard input of
