@@ -4,7 +4,7 @@ OUT_EXE := $(OUT_DIR)/hscalc
 HI_DIR := cache/hi_files
 OBJ_DIR := cache/obj_files
 HSFLAGS := -Wall -dynamic -j -XStrict
-GHCFLAGS := -hidir $(HI_DIR) -odir $(OBJ_DIR)
+GHCFLAGS := -hidir $(HI_DIR) -odir $(OBJ_DIR) -fmax-errors=1
 
 .PHONY: default
 default: $(OUT_EXE)
