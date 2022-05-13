@@ -34,6 +34,8 @@ import qualified Data.Text.Read as Read (rational)
 
 import Control.Monad (when)
 
+import GHC.Float (fromRat)
+
 -- the oper stack is a temporary storage place for opers
 -- the tree stack holds the result, the output, as well as being used for
 -- intermediate storage
@@ -433,11 +435,10 @@ evaluate (Branch op left right) = evaluate left `operate` evaluate right
             Splat  -> (*)
             Divide -> (/)
             Modulo -> mod'
-            -- FIXME
-            -- exponents that are non-integral would be a nice feature.
-            -- this implementation treats `x^2` and `x^2.8` as equal
+            -- uses floating-point exponents, unfortunately.
             Hihat  -> \x y ->
-                (x ^^ (floor y :: Integer)) & toRational
+                (fromRat x ** fromRat y :: Double) & toRational
+
 
 eval_show :: ASTree -> String
 eval_show = evaluate <&> show_rational
