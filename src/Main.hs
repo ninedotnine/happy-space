@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 module Main where
 import Control.Monad (unless)
 import Control.Monad.Trans (liftIO)

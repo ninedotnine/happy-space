@@ -4,8 +4,6 @@
 -- it gives higher precedence to operators which are not separated by spaces.
 
 
-{-# LANGUAGE OverloadedStrings #-}
-
 module ShuntingYard (
     pretty_show,
     run_shunting_yard,
