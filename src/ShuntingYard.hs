@@ -69,6 +69,7 @@ data Operator = Plus
               | Minus
               | Splat
               | Divide
+              | FloorDiv
               | Modulo
               | Hihat
               deriving Eq
@@ -87,16 +88,17 @@ type Stack_State = (Oper_Stack, Tree_Stack, Tightness)
 
 type CuteParser = Parsec Text Stack_State
 
-oper_to_char :: Operator -> Char
-oper_to_char Plus   = '+'
-oper_to_char Minus  = '-'
-oper_to_char Splat  = '*'
-oper_to_char Divide = '/'
-oper_to_char Modulo = '%'
-oper_to_char Hihat  = '^'
+oper_to_char :: Operator -> String
+oper_to_char Plus   = "+"
+oper_to_char Minus  = "-"
+oper_to_char Splat  = "*"
+oper_to_char Divide = "/"
+oper_to_char FloorDiv = "//"
+oper_to_char Modulo = "%"
+oper_to_char Hihat  = "^"
 
 instance Show Operator where
-    show x = [oper_to_char x]
+    show x = oper_to_char x
 
 pref_oper_to_char :: PrefixOperator -> Char
 pref_oper_to_char Negate = '~'
@@ -110,6 +112,7 @@ get_prec Plus   = Precedence 6
 get_prec Minus  = Precedence 6
 get_prec Splat  = Precedence 7
 get_prec Divide = Precedence 7
+get_prec FloorDiv = Precedence 7
 get_prec Modulo = Precedence 7
 get_prec Hihat  = Precedence 8
 
@@ -241,6 +244,7 @@ parse_infix_oper = do
             Parsec.char '+' *> pure Plus   <|>
             Parsec.char '-' *> pure Minus  <|>
             Parsec.char '*' *> pure Splat  <|>
+            Parsec.try (Parsec.string "//") *> pure FloorDiv <|>
             Parsec.char '/' *> pure Divide <|>
             Parsec.char '%' *> pure Modulo <|>
             Parsec.char '^' *> pure Hihat <?> "infix operator"
@@ -432,6 +436,9 @@ evaluate (Branch op left right) = evaluate left `operate` evaluate right
             Minus  -> (-)
             Splat  -> (*)
             Divide -> (/)
+            FloorDiv -> \x y -> (x/y)
+                              & floor
+                              & (toRational :: Integer -> Rational)
             Modulo -> mod'
             -- uses floating-point exponents, unfortunately.
             Hihat  -> \x y ->
