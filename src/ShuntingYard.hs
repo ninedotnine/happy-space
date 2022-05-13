@@ -3,7 +3,6 @@
 -- it does not make any attempt at associativity, although this is possible.
 -- it gives higher precedence to operators which are not separated by spaces.
 
-
 module ShuntingYard (
     pretty_show,
     run_shunting_yard,
@@ -13,26 +12,18 @@ module ShuntingYard (
     parse_eval_print
 ) where
 
-import qualified Text.Parsec as Parsec
-import Text.Parsec (Parsec, (<|>), (<?>))
-
--- for trim_spaces
-import Data.Char (isSpace)
-
-import Data.Fixed (mod')
-
-import Data.Functor ((<&>))
-import Data.Function ((&))
-
-import Data.Ratio (numerator, denominator)
-
-import Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Data.Text.Read as Read (rational)
-
 import Control.Monad (when)
-
+import Data.Char (isSpace) -- for trim_spaces
+import Data.Fixed qualified as Fixed (mod')
+import Data.Functor (void, (<&>))
+import Data.Function ((&))
+import Data.Ratio (numerator, denominator)
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Text.Read qualified as Read (rational)
 import GHC.Float (fromRat)
+import Text.Parsec qualified as Parsec
+import Text.Parsec (Parsec, (<|>), (<?>))
 
 -- the oper stack is a temporary storage place for opers
 -- the tree stack holds the result, the output, as well as being used for
@@ -88,33 +79,34 @@ type Stack_State = (Oper_Stack, Tree_Stack, Tightness)
 
 type CuteParser = Parsec Text Stack_State
 
-oper_to_char :: Operator -> String
-oper_to_char Plus   = "+"
-oper_to_char Minus  = "-"
-oper_to_char Splat  = "*"
-oper_to_char Divide = "/"
-oper_to_char FloorDiv = "//"
-oper_to_char Modulo = "%"
-oper_to_char Hihat  = "^"
 
 instance Show Operator where
-    show x = oper_to_char x
+    show = \case
+        Plus     -> "+"
+        Minus    -> "-"
+        Splat    -> "*"
+        Divide   -> "/"
+        FloorDiv -> "//"
+        Modulo   -> "%"
+        Hihat    -> "^"
 
 pref_oper_to_char :: PrefixOperator -> Char
-pref_oper_to_char Negate = '~'
-pref_oper_to_char Explode = '!'
+pref_oper_to_char = \case
+    Negate  -> '~'
+    Explode -> '!'
 
 instance Show PrefixOperator where
     show x = [pref_oper_to_char x]
 
 get_prec :: Operator -> Precedence
-get_prec Plus   = Precedence 6
-get_prec Minus  = Precedence 6
-get_prec Splat  = Precedence 7
-get_prec Divide = Precedence 7
-get_prec FloorDiv = Precedence 7
-get_prec Modulo = Precedence 7
-get_prec Hihat  = Precedence 8
+get_prec = \case
+    Plus     -> Precedence 6
+    Minus    -> Precedence 6
+    Splat    -> Precedence 7
+    Divide   -> Precedence 7
+    FloorDiv -> Precedence 7
+    Modulo   -> Precedence 7
+    Hihat    -> Precedence 8
 
 
 -- functions to get the current state
@@ -213,24 +205,24 @@ parse_num = do
 parse_prefix_op :: CuteParser TermToken
 parse_prefix_op = do
     oper <- parse_oper_symbol
-    spacing <- Parsec.optionMaybe respect_spaces
-    case spacing of
+    Parsec.optionMaybe respect_spaces >>= \case
         Nothing -> pure (TightPreOp oper)
         Just () -> pure (SpacedPreOp oper)
     where parse_oper_symbol =
-            Parsec.char '!' *> pure Explode <|>
-            Parsec.char '~' *> pure Negate <?> "prefix operator"
+                Parsec.char '!' *> pure Explode
+            <|> Parsec.char '~' *> pure Negate
+            <?> "prefix operator"
 
 parse_left_paren :: CuteParser TermToken
 parse_left_paren = do
-    Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.char '(' *> pure ()))
-    ignore_spaces *> Parsec.char '(' *> pure LParen
+    void $ Parsec.lookAhead (Parsec.try parse_l)
+    parse_l *> pure LParen
+    where parse_l = ignore_spaces *> Parsec.char '('
 
 -- oper parsers
 parse_infix_oper :: CuteParser OperToken
 parse_infix_oper = do
-    spacing <- Parsec.optionMaybe respect_spaces
-    case spacing of
+    Parsec.optionMaybe respect_spaces >>= \case
         Nothing -> do
             if_loosely_spaced (oper_stack_push StackSpace)
             set_spacing_tight True
@@ -240,19 +232,22 @@ parse_infix_oper = do
     if_loosely_spaced (respect_spaces <?> "space after `" ++ show oper ++ "`")
     if_tightly_spaced $ no_spaces ("whitespace after `" ++ show oper ++ "`")
     pure (Oper oper)
-    where parse_oper_symbol =
-            Parsec.char '+' *> pure Plus   <|>
-            Parsec.char '-' *> pure Minus  <|>
-            Parsec.char '*' *> pure Splat  <|>
-            Parsec.try (Parsec.string "//") *> pure FloorDiv <|>
-            Parsec.char '/' *> pure Divide <|>
-            Parsec.char '%' *> pure Modulo <|>
-            Parsec.char '^' *> pure Hihat <?> "infix operator"
+    where
+        parse_oper_symbol =
+                Parsec.char '+' *> pure Plus
+            <|> Parsec.char '-' *> pure Minus
+            <|> Parsec.char '*' *> pure Splat
+            <|> parse_floordiv  *> pure FloorDiv -- must try this before Divide
+            <|> Parsec.char '/' *> pure Divide
+            <|> Parsec.char '%' *> pure Modulo
+            <|> Parsec.char '^' *> pure Hihat
+            <?> "infix operator"
+        parse_floordiv = Parsec.try (Parsec.string "//")
 
 parse_right_paren :: CuteParser OperToken
 parse_right_paren = do
     spacing <- Parsec.optionMaybe respect_spaces
-    _ <- Parsec.char ')'
+    void $ Parsec.char ')'
     pure $ case spacing of
         Nothing -> RParen
         Just () -> RParenAfterSpace
@@ -326,9 +321,12 @@ look_for thing = do
             StackOp op -> do
                 make_branch op toks
                 look_for thing
-            StackLParen -> Parsec.parserFail "incorrectly spaced parentheses"
-            StackLParenFollowedBySpace -> Parsec.parserFail "incorrectly spaced parentheses"
-            StackSpace -> Parsec.parserFail "incorrect spacing or parentheses"
+            StackLParen ->
+                Parsec.parserFail "incorrectly spaced parentheses"
+            StackLParenFollowedBySpace ->
+                Parsec.parserFail "incorrectly spaced parentheses"
+            StackSpace ->
+                Parsec.parserFail "incorrect spacing or parentheses"
 
 find_left_space :: CuteParser ()
 find_left_space = look_for StackSpace *> set_spacing_tight False
@@ -337,7 +335,10 @@ parse_term_token :: CuteParser TermToken
 parse_term_token = parse_num <|> parse_left_paren <|> parse_prefix_op
 
 check_for_oper :: CuteParser ()
-check_for_oper = Parsec.lookAhead (Parsec.try (ignore_spaces *> Parsec.oneOf valid_op_chars)) *> pure ()
+check_for_oper = void
+    $ Parsec.lookAhead
+    $ Parsec.try
+    $ ignore_spaces *> Parsec.oneOf valid_op_chars
     where valid_op_chars = "+-*/%^"
 
 apply_tight_prefix_opers :: CuteParser ()
@@ -363,7 +364,8 @@ parse_term = do
     toke <- parse_term_token
     case toke of
         LParen -> do
-            if_tightly_spaced (oper_stack_push StackSpace *> set_spacing_tight False)
+            if_tightly_spaced (oper_stack_push StackSpace
+                               *> set_spacing_tight False)
             spacing <- Parsec.optionMaybe respect_spaces
             case spacing of
                 Nothing -> oper_stack_push StackLParen
@@ -381,8 +383,7 @@ parse_term = do
 
 parse_oper :: CuteParser ASTree
 parse_oper = do
-    toke <- parse_oper_token
-    case toke of
+    parse_oper_token >>= \case
         RParen -> do
             if_tightly_spaced find_left_space
             look_for StackLParen
@@ -414,13 +415,18 @@ parse_expression :: CuteParser ASTree
 parse_expression = parse_term
 
 run_shunting_yard :: Text -> Either Parsec.ParseError ASTree
-run_shunting_yard input = Parsec.runParser parse_expression start_state "input" (trim_spaces input)
+run_shunting_yard input = Parsec.runParser
+                            parse_expression
+                            start_state
+                            name
+                            (trim_spaces input)
     where
         start_state = (Oper_Stack [], Tree_Stack [], Tight False)
+        name = "input"
         trim_spaces = Text.dropWhile isSpace <&> Text.dropWhileEnd isSpace
 
 print_shunting_yard :: Text -> IO ()
-print_shunting_yard input = case run_shunting_yard input of
+print_shunting_yard = run_shunting_yard <&> \case
     Left err -> putStrLn (show err)
     Right tree -> putStrLn (pretty_show tree)
 
@@ -439,10 +445,10 @@ evaluate (Branch op left right) = evaluate left `operate` evaluate right
             FloorDiv -> \x y -> (x/y)
                               & floor
                               & (toRational :: Integer -> Rational)
-            Modulo -> mod'
+            Modulo -> Fixed.mod'
             -- uses floating-point exponents, unfortunately.
-            Hihat  -> \x y ->
-                (fromRat x ** fromRat y :: Double) & toRational
+            Hihat  -> \x y -> fromRat x ** fromRat y
+                            & (toRational :: Double -> Rational)
 
 
 eval_show :: ASTree -> String
@@ -454,6 +460,6 @@ show_rational n = if denominator n == 1
     else show (fromRational n :: Double)
 
 parse_eval_print :: Text -> IO ()
-parse_eval_print input = case run_shunting_yard input of
+parse_eval_print = run_shunting_yard <&> \case
     Left err -> putStrLn (show err)
     Right tree -> putStrLn (eval_show tree)

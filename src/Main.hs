@@ -1,10 +1,15 @@
-module Main where
+module Main (
+    main
+) where
+
 import Control.Monad (unless)
 import Control.Monad.Trans (liftIO)
 import Data.Char (isSpace)
+import Data.Functor ((<&>))
+import Data.Function ((&))
+import Data.Text qualified as Text (pack)
+import Data.Text.IO qualified as Text (getContents)
 import System.Console.Haskeline (runInputT, defaultSettings, getInputLine)
-import qualified Data.Text as Text (pack)
-import qualified Data.Text.IO as Text (getContents)
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
 
@@ -19,21 +24,22 @@ main = do
 
 repl :: IO ()
 repl = runInputT defaultSettings loop where
-    loop = do
-        m_input <- getInputLine "> "
-        case m_input of
-            Nothing -> pure ()
-            Just input -> liftIO (pep input) >> loop
+    loop = getInputLine "> " >>= \case
+        Nothing -> pure ()
+        Just input -> liftIO (pep input) >> loop
 
 pep :: String -> IO ()
-pep line = unless (all isSpace line) (parse_eval_print (Text.pack line))
---
+pep line = unless (all isSpace line) $
+    line & Text.pack & parse_eval_print
+
 parse_stdin :: IO ()
-parse_stdin = do
-    input <- Text.getContents
-    case run_shunting_yard input of
-        Left err -> putStrLn (show err) >> exitFailure
-        Right tree -> putStrLn (eval_show tree) >> exitSuccess
+parse_stdin = Text.getContents
+          <&> run_shunting_yard
+          >>= \case
+    Left err -> putStrLn (show err)
+             >> exitFailure
+    Right tree -> putStrLn (eval_show tree)
+               >> exitSuccess
 
 parse_all :: [String] -> IO ()
 parse_all exprs = mapM_ parse_eval_print (map Text.pack exprs)
