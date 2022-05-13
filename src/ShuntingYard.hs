@@ -174,7 +174,8 @@ silent_space :: CuteParser Char
 silent_space = Parsec.char ' ' <?> ""
 
 no_spaces :: String -> CuteParser ()
-no_spaces failmsg = Parsec.try ((Parsec.try silent_space *> Parsec.unexpected failmsg) <|> pure ())
+no_spaces failmsg = (Parsec.try silent_space *> Parsec.unexpected failmsg)
+                    <|> pure ()
 
 if_loosely_spaced :: CuteParser () -> CuteParser ()
 if_loosely_spaced action = do
