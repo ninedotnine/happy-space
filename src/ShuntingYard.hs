@@ -98,8 +98,8 @@ pref_oper_to_char = \case
 instance Show PrefixOperator where
     show x = [pref_oper_to_char x]
 
-get_prec :: Operator -> Precedence
-get_prec = \case
+precedence :: Operator -> Precedence
+precedence = \case
     Plus     -> Precedence 6
     Minus    -> Precedence 6
     Splat    -> Precedence 7
@@ -299,7 +299,7 @@ apply_higher_prec_ops current = do
             StackSpacedPreOp op -> do
                 make_twig op toks
                 apply_higher_prec_ops current
-            StackOp op -> case (get_prec op `compare` current) of
+            StackOp op -> case (precedence op `compare` current) of
                 LT -> pure ()
                 _ -> do
                     make_branch op toks
@@ -402,7 +402,7 @@ parse_oper = do
                 _ -> pure ()
             parse_oper <|> finish_expr
         Oper op -> do
-            apply_higher_prec_ops (get_prec op)
+            apply_higher_prec_ops (precedence op)
             oper_stack_push (StackOp op)
             parse_term
 
