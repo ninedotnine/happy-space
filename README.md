@@ -25,10 +25,10 @@ but:
 
 ```
 > 1+ 2
-"input" (line 1, column 4):
+(line 1, column 4):
 unexpected whitespace after `+`
 > 1 +2
-"input" (line 1, column 4):
+(line 1, column 4):
 unexpected "2"
 expecting space after `+`
 ```

@@ -423,7 +423,7 @@ run_shunting_yard input = Parsec.runParser
                             (trim_spaces input)
     where
         start_state = (Oper_Stack [], Tree_Stack [], Tight False)
-        name = "input"
+        name = ""
         trim_spaces = Text.dropWhile isSpace <&> Text.dropWhileEnd isSpace
 
 print_shunting_yard :: Text -> IO ()
